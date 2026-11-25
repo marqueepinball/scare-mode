@@ -20,6 +20,7 @@
     <span class="pill" id="pBand"><i class="dot"></i><span>Armband</span></span>
     <span class="pill" id="pFace"><i class="dot"></i><span>Face cam</span></span>
     <span class="pill" id="pField"><i class="dot"></i><span>Playfield cam</span></span>
+    <span class="pill" id="pScore"><i class="dot"></i><span>Score cam</span></span>
   </div>
 </div>
 
@@ -36,6 +37,8 @@
   <h2>Now playing</h2>
   <div class="now" id="nowName"></div>
   <div class="bpmline"><div class="big" id="bpm">--</div><div class="muted">BPM now · peak <b id="peak">--</b> · <span id="time">0:00</span></div></div>
+  <div class="muted">Score <b id="liveScore" style="color:var(--ecto);font-size:20px">--</b></div>
+  <div class="row" style="margin-top:8px"><input id="fixScore" inputmode="numeric" autocomplete="off" placeholder="Correct the score (optional)"><button id="setScore" style="flex:0 0 auto">Set</button></div>
   <div class="row" style="margin-top:12px">
     <button class="cool" id="end">End game &amp; save</button>
     <button id="cancel">Discard</button>
@@ -49,7 +52,7 @@
 
 <div class="card">
   <h2>Games tonight</h2>
-  <table><thead><tr><th>Player</th><th>Peak</th><th>Low</th><th>Avg</th><th></th></tr></thead><tbody id="games"></tbody></table>
+  <table><thead><tr><th>Player</th><th>Peak</th><th>Low</th><th>Avg</th><th>Score</th><th></th></tr></thead><tbody id="games"></tbody></table>
   <div class="row" style="margin-top:12px">
     <button id="csv">Download CSV</button>
     <button id="clear">Clear night</button>
@@ -70,14 +73,14 @@
   <div class="row" style="margin-top:10px"><button id="reloadTv">Reload TV page</button></div>
 </div>
 
-<p class="muted">Page links for this room: <a id="lFace">Face cam</a> · <a id="lField">Playfield cam</a> · <a id="lTv">TV display</a></p>
+<p class="muted">Page links for this room: <a id="lFace">Face cam</a> · <a id="lField">Playfield cam</a> · <a id="lScore">Score cam</a> · <a id="lTv">TV display</a></p>
 
 <script src="vendor/peerjs.min.js"></script>
 <script src="common.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 $('room').textContent = SM.room;
-$('lFace').href = SM.link('face.html'); $('lField').href = SM.link('field.html'); $('lTv').href = SM.link('display.html');
+$('lFace').href = SM.link('face.html'); $('lField').href = SM.link('field.html'); $('lScore').href = SM.link('score.html'); $('lTv').href = SM.link('display.html');
 const BK = 'sm-backup-' + SM.room;
 let S = null, synced = false, editing = false;
 function pill(el, ok, text) { el.className = 'pill ' + (ok ? 'ok' : 'bad'); el.querySelector('span').textContent = text; }
@@ -105,7 +108,9 @@ function live(L) {
   pill($('pBand'), L.band, L.band ? `Armband: ${L.bpm} bpm` : 'Armband: offline');
   pill($('pFace'), L.face, L.face ? 'Face cam: live' : 'Face cam: off');
   pill($('pField'), L.field, L.field ? 'Playfield cam: live' : 'Playfield cam: off');
+  pill($('pScore'), L.scoreCam, L.scoreCam ? 'Score cam: live' : 'Score cam: off');
   $('bpm').textContent = L.bpm || '--';
+  $('liveScore').textContent = L.score == null ? '--' : L.score.toLocaleString('en-US');
 }
 
 function render() {
@@ -119,8 +124,8 @@ function render() {
     if (document.activeElement !== $('upNext')) $('upNext').value = S.upNext || '';
   }
   const games = [...S.games].sort((a, b) => b.peak - a.peak);
-  $('games').innerHTML = games.length ? games.map(g => `<tr><td>${esc(g.ini || '')} ${esc(g.name)}</td><td>${g.peak}</td><td>${g.low}</td><td>${g.avg}</td><td><button data-del="${g.id}">Delete</button></td></tr>`).join('')
-    : '<tr><td colspan="5" class="muted">No games yet</td></tr>';
+  $('games').innerHTML = games.length ? games.map(g => `<tr><td>${esc(g.ini || '')} ${esc(g.name)}</td><td>${g.peak}</td><td>${g.low}</td><td>${g.avg}</td><td>${g.score == null ? '' : Number(g.score).toLocaleString('en-US')}</td><td><button data-del="${g.id}">Delete</button></td></tr>`).join('')
+    : '<tr><td colspan="6" class="muted">No games yet</td></tr>';
 }
 setInterval(() => { if (S && S.current) { const el = Math.floor((Date.now() - S.current.start) / 1000); $('time').textContent = `${Math.floor(el / 60)}:${String(el % 60).padStart(2, '0')}`; } }, 500);
 
@@ -132,6 +137,7 @@ $('start').onclick = () => {
   link.send({ t: 'start', name, ini }); $('name').value = ''; $('ini').value = '';
 };
 $('end').onclick = () => link.send({ t: 'end' });
+$('setScore').onclick = () => { const v = $('fixScore').value.replace(/\D/g, ''); if (!v) return; link.send({ t: 'setScore', v: Number(v) }); $('fixScore').value = ''; };
 $('cancel').onclick = () => { if (confirm('Discard this game without saving?')) link.send({ t: 'cancel' }); };
 $('saveNext').onclick = () => link.send({ t: 'settings', upNext: $('upNext').value.trim() });
 $('clear').onclick = () => { if (confirm('Clear every game from tonight? Download the CSV first if you need it.')) link.send({ t: 'clear' }); };
@@ -144,8 +150,8 @@ $('saveSettings').onclick = () => {
 };
 $('csv').onclick = () => {
   if (!S) return;
-  const rows = [['initials', 'name', 'peak_bpm', 'low_bpm', 'avg_bpm', 'seconds', 'ended_at']].concat(
-    S.games.map(g => [g.ini, g.name, g.peak, g.low, g.avg, g.dur, new Date(g.at).toISOString()]));
+  const rows = [['initials', 'name', 'peak_bpm', 'low_bpm', 'avg_bpm', 'score', 'modes', 'seconds', 'ended_at']].concat(
+    S.games.map(g => [g.ini, g.name, g.peak, g.low, g.avg, g.score ?? '', Object.entries(g.modes || {}).map(([k, n]) => n > 1 ? `${k} x${n}` : k).join('; '), g.dur, new Date(g.at).toISOString()]));
   const csv = rows.map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
   a.download = `scare-mode-${SM.room}-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
