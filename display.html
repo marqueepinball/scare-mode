@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Scare Mode TV</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Creepster&family=Big+Shoulders+Display:wght@500;700;900&family=Barlow+Semi+Condensed:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Fixed 1920x1080 TV stage scaled to fit. Leaders left, player face cam center, heartbeat right, scare log along the bottom. */
+:root{
+  --void:#060509;--crypt:#100c13;--crypt-2:#181220;--line:#2a2130;--bone:#ece4d6;--ash:#8a7f8f;
+  --blood:#ff2a45;--ember:#ff8a3d;--ecto:#6dffb0;
+  --font-mark:"Creepster","Impact",fantasy;
+  --font-num:"Big Shoulders Display","Oswald","Arial Narrow",sans-serif;
+  --font-body:"Barlow Semi Condensed","Arial Narrow",system-ui,sans-serif;
+  --font-mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  color-scheme:dark;
+}
+html,body{height:100%;margin:0}
+body{background:var(--void);color:var(--bone);font-family:var(--font-body);overflow:hidden;cursor:none}
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform-origin:center;transform:translate(-50%,-50%) scale(.5);
+  background:radial-gradient(1200px 700px at 50% 40%,#1a0f18 0%,var(--void) 70%);
+  display:grid;grid-template-rows:96px 1fr 72px;gap:24px;padding:36px 40px;box-sizing:border-box;font-variant-numeric:tabular-nums}
+header{display:grid;grid-template-columns:440px 1fr 520px;gap:32px;align-items:center}
+.mark{font-family:var(--font-mark);font-size:84px;line-height:.9;color:var(--blood);letter-spacing:2px;text-shadow:0 0 24px rgba(255,42,69,.45)}
+.event{text-align:center;display:flex;flex-direction:column;gap:6px;min-width:0}
+.event .eyebrow{font-size:20px;letter-spacing:.3em;text-transform:uppercase;color:var(--ash)}
+.event .name{font-family:var(--font-num);font-weight:700;font-size:44px;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.meta{display:flex;justify-content:flex-end;gap:36px}
+.meta div{display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+.meta span{font-size:18px;letter-spacing:.2em;text-transform:uppercase;color:var(--ash)}
+.meta b{font-family:var(--font-num);font-size:46px;font-weight:700;line-height:1;white-space:nowrap}
+main{display:grid;grid-template-columns:440px 1fr 520px;gap:32px;min-height:0}
+.panel{background:var(--crypt);border:1px solid var(--line);border-radius:6px;padding:24px 26px;box-sizing:border-box;display:flex;flex-direction:column;min-height:0}
+.ptitle{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.ptitle h2{margin:0;font-family:var(--font-num);font-weight:900;font-size:40px;letter-spacing:.03em;text-transform:uppercase;line-height:1}
+.ptitle small{font-size:18px;color:var(--ash);letter-spacing:.14em;text-transform:uppercase}
+.rule{font-size:18px;color:var(--ash);margin:6px 0 10px}
+.leaders{display:flex;flex-direction:column;gap:24px;min-height:0}
+.leaders .panel{flex:1}
+.hi h2{color:var(--blood)} .lo h2{color:var(--ecto)}
+ol.board{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+ol.board li{display:grid;grid-template-columns:40px 1fr auto;align-items:center;gap:14px;padding:3px 12px;border-radius:4px;font-size:24px}
+ol.board li:first-child{background:var(--crypt-2)}
+ol.board .rk{font-family:var(--font-num);font-weight:700;color:var(--ash);font-size:26px}
+ol.board .ini{font-family:var(--font-num);font-weight:900;font-size:30px;letter-spacing:.12em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ol.board .ini em{font-style:normal;font-family:var(--font-body);font-weight:500;font-size:20px;letter-spacing:0;color:var(--ash);margin-left:10px}
+ol.board .v{font-family:var(--font-num);font-weight:700;font-size:32px}
+ol.board .v small{font-size:18px;color:var(--ash);margin-left:4px;font-weight:500}
+ol.board .empty{color:var(--ash);font-size:22px;display:block;padding:8px 12px;background:none}
+.hi li:first-child .v{color:var(--blood)} .lo li:first-child .v{color:var(--ecto)}
+ol.board li.live{outline:2px solid var(--bone);background:rgba(236,228,214,.07)}
+.livetag{font-family:var(--font-body);font-size:15px;font-weight:700;letter-spacing:.14em;background:var(--bone);color:var(--void);padding:2px 7px;border-radius:3px;margin-left:10px;vertical-align:middle}
+.prize{margin-top:auto;padding-top:8px;font-size:19px;color:var(--ash);display:flex;justify-content:space-between}
+.prize b{color:var(--bone);font-weight:600}
+.cam{position:relative;border-radius:6px;overflow:hidden;background:#000;border:1px solid var(--line)}
+.cam video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;background:#000}
+#faceVid.mirror{transform:scaleX(-1)}
+.nosig{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;font-family:var(--font-mono);color:rgba(236,228,214,.55);letter-spacing:.3em;font-size:26px;
+  background:repeating-linear-gradient(0deg,rgba(255,255,255,.025) 0 2px,transparent 2px 5px),#050507}
+.nosig small{font-size:16px;letter-spacing:.15em;color:var(--ash)}
+.live-ok .nosig{display:none}
+.cam .scan{position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,.18) 0 2px,transparent 2px 4px);mix-blend-mode:multiply}
+.cam .vig{position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 160px 40px rgba(0,0,0,.8)}
+.cam .flash{position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 220px 60px rgba(255,42,69,0);transition:box-shadow .9s ease-out}
+.cam.scared .flash{box-shadow:inset 0 0 220px 60px rgba(255,42,69,.75);transition:none}
+.corner{position:absolute;width:56px;height:56px;border:4px solid rgba(236,228,214,.75)}
+.c1{top:22px;left:22px;border-right:0;border-bottom:0}.c2{top:22px;right:22px;border-left:0;border-bottom:0}
+.c3{bottom:22px;left:22px;border-right:0;border-top:0}.c4{bottom:22px;right:22px;border-left:0;border-top:0}
+.osd{position:absolute;font-family:var(--font-mono);font-size:20px;color:rgba(236,228,214,.9);letter-spacing:.06em;text-shadow:0 1px 2px #000}
+.osd.tl{top:40px;left:96px}.osd.tr{top:40px;right:96px;display:flex;align-items:center;gap:10px}
+.rec{width:16px;height:16px;border-radius:50%;background:var(--blood);animation:blink 1.2s steps(2,start) infinite}
+.idle .rec{animation:none;background:var(--ash)}
+@keyframes blink{to{visibility:hidden}}
+.pip{position:absolute;bottom:150px;right:36px;width:220px;height:326px;border:3px solid rgba(236,228,214,.8);border-radius:4px;overflow:hidden;background:#000;box-shadow:0 10px 30px rgba(0,0,0,.7)}
+.pip.landscape{width:400px;height:225px}
+.pip .nosig{font-size:15px;letter-spacing:.2em}
+.pip .osd{font-size:14px;top:8px;left:10px;background:rgba(0,0,0,.6);padding:2px 6px;border-radius:2px}
+.spike{position:absolute;top:130px;left:50%;transform:translate(-50%,-10px);opacity:0;font-family:var(--font-mark);font-size:76px;color:var(--blood);text-shadow:0 0 30px rgba(255,42,69,.8),0 3px 0 #000;transition:opacity .8s,transform .8s;white-space:nowrap}
+.cam.scared .spike{opacity:1;transform:translate(-50%,0);transition:none}
+.nameplate{position:absolute;left:0;right:0;bottom:0;padding:70px 40px 30px;background:linear-gradient(transparent,rgba(0,0,0,.92));display:flex;align-items:flex-end;justify-content:space-between;gap:24px}
+.who{display:flex;flex-direction:column;gap:4px;min-width:0}
+.who span{font-size:20px;letter-spacing:.24em;text-transform:uppercase;color:var(--ash)}
+.who b{font-family:var(--font-num);font-weight:900;font-size:64px;line-height:1;letter-spacing:.03em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.who b i{font-style:normal;font-size:40px;letter-spacing:.12em;color:var(--ash);margin-left:14px}
+.game{display:flex;gap:34px;text-align:right}
+.game div{display:flex;flex-direction:column;gap:2px}
+.game span{font-size:18px;letter-spacing:.2em;text-transform:uppercase;color:var(--ash)}
+.game b{font-family:var(--font-num);font-weight:700;font-size:44px;line-height:1}
+.heart .ptitle h2{color:var(--bone)}
+.bpmrow{display:flex;align-items:center;gap:26px;margin-top:10px}
+.heartsvg{width:92px;height:84px;flex:none;filter:drop-shadow(0 0 18px rgba(255,42,69,.5));transform-origin:center}
+.heartsvg path{fill:var(--zone,var(--blood))}
+.bpm{font-family:var(--font-num);font-weight:900;font-size:170px;line-height:.82;color:var(--zone,var(--blood));letter-spacing:-.01em;min-width:250px}
+.bpmunit{display:flex;flex-direction:column;gap:6px}
+.bpmunit span{font-family:var(--font-num);font-weight:700;font-size:34px;color:var(--ash);letter-spacing:.06em}
+.bpmunit small{font-size:17px;color:var(--ash);letter-spacing:.1em;text-transform:uppercase}
+.zone{font-family:var(--font-num);font-weight:900;font-size:30px;letter-spacing:.12em;padding:2px 12px;border-radius:3px;background:var(--zone,var(--blood));color:var(--void);text-transform:uppercase}
+.zbar{margin-top:20px;display:grid;grid-template-columns:repeat(4,1fr);gap:4px;position:relative;height:44px}
+.zbar i{display:block;height:10px;border-radius:2px;opacity:.85}
+.zbar i:nth-child(1){background:var(--ecto)}.zbar i:nth-child(2){background:#d8e86a}.zbar i:nth-child(3){background:var(--ember)}.zbar i:nth-child(4){background:var(--blood)}
+.zbar .tick{position:absolute;top:-6px;width:4px;height:22px;background:var(--bone);border-radius:2px;transform:translateX(-50%);transition:left .3s}
+.zlabels{position:absolute;top:18px;left:0;right:0;display:flex;justify-content:space-between;font-size:16px;color:var(--ash);font-family:var(--font-mono)}
+.ecg{margin-top:8px;height:150px;background:#07090a;border:1px solid var(--line);border-radius:4px;position:relative;overflow:hidden}
+.ecg canvas,.hist canvas{width:100%;height:100%;display:block}
+.sub{margin-top:18px;display:flex;justify-content:space-between;align-items:baseline}
+.sub h3{margin:0;font-size:19px;letter-spacing:.2em;text-transform:uppercase;color:var(--ash);font-weight:600}
+.sub small{font-family:var(--font-mono);font-size:15px;color:var(--ash)}
+.hist{margin-top:8px;flex:1;min-height:0}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:16px}
+.stats div{background:var(--crypt-2);border-radius:4px;padding:10px 14px;display:flex;flex-direction:column;gap:2px}
+.stats span{font-size:16px;letter-spacing:.2em;text-transform:uppercase;color:var(--ash)}
+.stats b{font-family:var(--font-num);font-weight:700;font-size:46px;line-height:1}
+.stats .pk b{color:var(--blood)}.stats .lw b{color:var(--ecto)}
+footer{display:grid;grid-template-columns:auto 1fr auto auto;gap:24px;align-items:center;background:var(--crypt);border:1px solid var(--line);border-radius:6px;padding:0 24px;overflow:hidden}
+footer .lab{font-family:var(--font-num);font-weight:900;font-size:28px;letter-spacing:.1em;color:var(--blood);text-transform:uppercase}
+.log{display:flex;gap:40px;overflow:hidden;white-space:nowrap;font-size:24px;min-width:0;mask-image:linear-gradient(90deg,#000 85%,transparent);-webkit-mask-image:linear-gradient(90deg,#000 85%,transparent)}
+.log span{color:var(--ash)}.log span b{color:var(--bone);font-weight:600}.log span i{font-style:normal;color:var(--blood);font-weight:700}
+.log span:first-child{color:var(--bone)}
+.next{font-size:22px;color:var(--ash);white-space:nowrap}.next b{color:var(--bone);font-family:var(--font-num);font-size:28px;letter-spacing:.1em;margin-left:8px}
+.links{display:flex;gap:10px}
+.links i{display:block;width:12px;height:12px;border-radius:50%;background:#3a2f3f}
+.links i.on{background:var(--ecto);box-shadow:0 0 6px var(--ecto)}
+#roomtag{position:absolute;right:44px;bottom:6px;font-family:var(--font-mono);font-size:14px;color:#4a3f4f;letter-spacing:.1em}
+@media (prefers-reduced-motion:reduce){.rec{animation:none}.cam.scared .flash,.cam .flash,.spike{transition:none!important}}
+</style>
+</head><body>
+<div id="stage">
+  <header>
+    <div class="mark">Scare Mode</div>
+    <div class="event">
+      <div class="eyebrow" id="eyebrow">Marquee Pinball · Tournament night</div>
+      <div class="name" id="eventName">Scare Mode Challenge</div>
+    </div>
+    <div class="meta">
+      <div><span>Machine</span><b id="machine">Table 1</b></div>
+      <div><span>Games</span><b id="gamesCount">0</b></div>
+      <div><span>Local</span><b id="clock">--</b></div>
+    </div>
+  </header>
+
+  <main>
+    <section class="leaders">
+      <div class="panel hi">
+        <div class="ptitle"><h2>Most Scared</h2><small>Highest</small></div>
+        <div class="rule">Ranked by highest peak heartbeat in a single game</div>
+        <ol class="board" id="hiBoard"></ol>
+        <div class="prize"><span>Prize</span><b id="prizeHi">Scream Queen trophy</b></div>
+      </div>
+      <div class="panel lo">
+        <div class="ptitle"><h2>Ice Cold</h2><small>Lowest</small></div>
+        <div class="rule">Ranked by lowest peak heartbeat in a single game</div>
+        <ol class="board" id="loBoard"></ol>
+        <div class="prize"><span>Prize</span><b id="prizeLo">Nerves of Steel trophy</b></div>
+      </div>
+    </section>
+
+    <section class="cam idle" id="cam">
+      <div id="faceWrap" style="position:absolute;inset:0">
+        <video id="faceVid" class="mirror" autoplay muted playsinline></video>
+        <div class="nosig">NO SIGNAL<small>Open the Face Cam page on the backbox phone</small></div>
+      </div>
+      <div class="scan"></div><div class="vig"></div><div class="flash"></div>
+      <div class="corner c1"></div><div class="corner c2"></div><div class="corner c3"></div><div class="corner c4"></div>
+      <div class="osd tl">CAM 1 · BACKBOX · PLAYER FACE</div>
+      <div class="osd tr"><i class="rec"></i><span id="tc">STANDBY</span></div>
+      <div class="pip" id="pip">
+        <video id="fieldVid" autoplay muted playsinline></video>
+        <div class="nosig">NO SIGNAL</div>
+        <div class="osd">CAM 2 · PLAYFIELD</div>
+      </div>
+      <div class="spike" id="spike">+30 BPM!</div>
+      <div class="nameplate">
+        <div class="who"><span id="whoLabel">Up next</span><b id="whoName">Waiting for player</b></div>
+        <div class="game">
+          <div><span>Game time</span><b id="gameTime">0:00</b></div>
+          <div><span>Peak</span><b id="gamePeak">--</b></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel heart">
+      <div class="ptitle"><h2>Heartbeat</h2><div class="zone" id="zone">No signal</div></div>
+      <div class="bpmrow">
+        <svg class="heartsvg" id="heart" viewBox="0 0 24 22" aria-hidden="true"><path d="M12 21.6 10.3 20C4.2 14.5 0 10.8 0 6.3 0 2.6 2.9 0 6.5 0c2.1 0 4.1 1 5.5 2.6C13.4 1 15.4 0 17.5 0 21.1 0 24 2.6 24 6.3c0 4.5-4.2 8.2-10.3 13.7L12 21.6Z"/></svg>
+        <div class="bpm" id="bpm">--</div>
+        <div class="bpmunit"><span>BPM</span><small id="bpmSrc">Armband offline</small></div>
+      </div>
+      <div class="zbar"><i></i><i></i><i></i><i></i><div class="tick" id="ztick"></div>
+        <div class="zlabels"><span>60</span><span>90</span><span>115</span><span>140</span><span>180</span></div></div>
+      <div class="ecg"><canvas id="ecg" width="468" height="150"></canvas></div>
+      <div class="sub"><h3 id="histTitle">Heart rate</h3><small>last 90 s</small></div>
+      <div class="hist"><canvas id="hist" width="468" height="230"></canvas></div>
+      <div class="stats">
+        <div class="pk"><span>Peak</span><b id="sPeak">--</b></div>
+        <div class="lw"><span>Low</span><b id="sLow">--</b></div>
+        <div><span>Avg</span><b id="sAvg">--</b></div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="lab">Scare log</div>
+    <div class="log" id="log"><span>Waiting for the first scare…</span></div>
+    <div class="next" id="nextWrap">Up next<b id="upNext">--</b></div>
+    <div class="links" title="Face cam · Playfield cam · Armband · Control"><i id="lkFace"></i><i id="lkField"></i><i id="lkBand"></i><i id="lkCtl"></i></div>
+  </footer>
+  <div id="roomtag"></div>
+</div>
+
+<script src="vendor/peerjs.min.js"></script>
+<script src="common.js"></script>
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const stage = $('stage');
+function fit() { const s = Math.min(innerWidth / 1920, innerHeight / 1080); stage.style.transform = `translate(-50%,-50%) scale(${s})`; }
+addEventListener('resize', fit); fit();
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+if (SM.qs.get('mirror') === '0') $('faceVid').classList.remove('mirror');
+$('roomtag').textContent = 'ROOM ' + SM.room.toUpperCase();
+
+/* ================= state (persisted on this screen) ================= */
+const KEY = 'sm-state-' + SM.room;
+const defaults = () => ({
+  event: 'Scare Mode Challenge', eyebrow: 'Marquee Pinball · Tournament night', machine: 'Table 1',
+  prizeHi: 'Scream Queen trophy', prizeLo: 'Nerves of Steel trophy', upNext: '',
+  games: [], current: null, log: [], updatedAt: 0
+});
+let S = defaults();
+try { const j = JSON.parse(localStorage.getItem(KEY)); if (j) S = Object.assign(defaults(), j); } catch (e) {}
+function save() { S.updatedAt = Date.now(); try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} broadcast(); renderAll(); }
+
+/* ================= live heart data ================= */
+let bpm = null, lastHr = 0, recent = [], lastScare = 0;
+const hist = [];
+function hrFresh() { return bpm && Date.now() - lastHr < 6000; }
+
+function onHr(v) {
+  v = Math.round(v); if (!(v > 25 && v < 250)) return;
+  bpm = v; lastHr = Date.now();
+  const now = Date.now();
+  recent.push({ t: now, v }); recent = recent.filter(r => now - r.t < 12000);
+  if (S.current) {
+    const c = S.current; c.peak = Math.max(c.peak || 0, v); c.low = Math.min(c.low || 999, v); c.sum = (c.sum || 0) + v; c.n = (c.n || 0) + 1;
+    if (!onHr.saveT || now - onHr.saveT > 3000) { onHr.saveT = now; save(); }
+  }
+  // spike detection: +15 bpm above the 12 s low, at most one every 8 s
+  const mn = Math.min(...recent.map(r => r.v));
+  if (v - mn >= 15 && now - lastScare > 8000) scare(v - mn, v);
+}
+
+function scare(amt, v) {
+  lastScare = Date.now();
+  const who = S.current ? S.current.ini || S.current.name : '---';
+  const el = S.current ? Math.floor((Date.now() - S.current.start) / 1000) : 0;
+  S.log.unshift({ ts: `${Math.floor(el / 60)}:${String(el % 60).padStart(2, '0')}`, who, amt: Math.round(amt), bpm: Math.round(v) });
+  S.log.length = Math.min(S.log.length, 10);
+  $('spike').textContent = `+${Math.round(amt)} BPM!`;
+  const cam = $('cam'); cam.classList.remove('scared'); void cam.offsetWidth; cam.classList.add('scared');
+  clearTimeout(scare.tm); scare.tm = setTimeout(() => cam.classList.remove('scared'), 1400);
+  save();
+}
+
+/* ================= commands from the control page ================= */
+function command(m) {
+  switch (m.t) {
+    case 'start':
+      S.current = { id: Date.now().toString(36), name: (m.name || '').trim().slice(0, 24), ini: (m.ini || '').trim().toUpperCase().slice(0, 4), start: Date.now(), peak: 0, low: 999, sum: 0, n: 0 };
+      if (m.upNext !== undefined) S.upNext = m.upNext;
+      hist.length = 0; save(); break;
+    case 'end':
+      if (S.current && S.current.n > 0) {
+        const c = S.current;
+        S.games.push({ id: c.id, name: c.name, ini: c.ini, peak: c.peak, low: c.low, avg: Math.round(c.sum / c.n), dur: Math.round((Date.now() - c.start) / 1000), at: Date.now() });
+      }
+      S.current = null; save(); break;
+    case 'cancel': S.current = null; save(); break;
+    case 'settings': ['event', 'eyebrow', 'machine', 'prizeHi', 'prizeLo', 'upNext'].forEach(k => { if (typeof m[k] === 'string') S[k] = m[k]; }); save(); break;
+    case 'delete': S.games = S.games.filter(g => g.id !== m.id); save(); break;
+    case 'clear': S.games = []; S.log = []; S.current = null; save(); break;
+    case 'restore': if (m.state && (m.state.updatedAt || 0) > (S.updatedAt || 0)) { S = Object.assign(defaults(), m.state); save(); } break;
+    case 'testScare': scare(30, (bpm || 80) + 30); break;
+    case 'reload': location.reload(); break;
+  }
+}
+
+/* ================= networking (this screen is the hub) ================= */
+let peer = null;
+const conns = new Map(); // conn -> {role, lastSeen}
+const calls = {};        // role -> MediaConnection
+const linkSeen = { face: 0, field: 0, control: 0 };
+
+function startPeer() {
+  peer = new Peer(SM.tvId, SM.peerOptions());
+  peer.on('error', err => {
+    console.warn('peer', err.type);
+    if (err.type === 'unavailable-id' || err.type === 'network' || err.type === 'server-error' || err.type === 'socket-error') {
+      try { peer.destroy(); } catch (e) {}
+      setTimeout(startPeer, 4000);
+    }
+  });
+  peer.on('disconnected', () => setTimeout(() => { if (!peer.destroyed) peer.reconnect(); }, 2000));
+  peer.on('connection', conn => {
+    const role = (conn.metadata && conn.metadata.role) || 'unknown';
+    conn.on('open', () => {
+      conns.set(conn, { role, lastSeen: Date.now() });
+      if (role === 'control') conn.send({ t: 'state', state: S, live: liveInfo() });
+    });
+    conn.on('data', m => {
+      const info = conns.get(conn); if (info) info.lastSeen = Date.now();
+      linkSeen[role] = Date.now();
+      if (!m || !m.t) return;
+      if (role === 'face' && m.t === 'hr') onHr(m.bpm);
+      else if (role === 'face' && m.t === 'band' && !m.ok) lastHr = 0;
+      else if (role === 'field' && m.t === 'orient') $('pip').classList.toggle('landscape', m.v === 'landscape');
+      else if (role === 'control') command(m);
+    });
+    conn.on('close', () => conns.delete(conn));
+    conn.on('error', () => conns.delete(conn));
+  });
+  peer.on('call', call => {
+    const role = call.metadata && call.metadata.role;
+    if (role !== 'face' && role !== 'field') { call.close(); return; }
+    if (calls[role] && calls[role] !== call) { try { calls[role].close(); } catch (e) {} }
+    calls[role] = call;
+    call.answer();
+    call.on('stream', s => {
+      const v = role === 'face' ? $('faceVid') : $('fieldVid');
+      v.srcObject = s; v.muted = true; v.play().catch(() => {});
+    });
+    call.on('close', () => { if (calls[role] === call) { delete calls[role]; (role === 'face' ? $('faceVid') : $('fieldVid')).srcObject = null; } });
+  });
+}
+startPeer();
+
+function liveInfo() {
+  const now = Date.now();
+  return { bpm: hrFresh() ? bpm : null, face: now - linkSeen.face < 7000 && !!calls.face, field: now - linkSeen.field < 7000 && !!calls.field, band: hrFresh() };
+}
+function broadcast() {
+  const msg = { t: 'state', state: S, live: liveInfo() };
+  for (const [c, i] of conns) if (i.role === 'control' && c.open) { try { c.send(msg); } catch (e) {} }
+}
+setInterval(() => {
+  const now = Date.now();
+  for (const [c, i] of conns) {
+    if (now - i.lastSeen > 8000) { try { c.close(); } catch (e) {} conns.delete(c); continue; }
+    if (c.open) { try { c.send(i.role === 'control' ? { t: 'live', live: liveInfo() } : { t: 'ping' }); } catch (e) {} }
+  }
+  // drop a video whose phone has gone quiet
+  ['face', 'field'].forEach(r => { if (calls[r] && now - linkSeen[r] > 10000) { try { calls[r].close(); } catch (e) {} } });
+}, 2000);
+
+/* ================= rendering ================= */
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function renderBoard(el, asc) {
+  const all = S.games.map(g => ({ ...g }));
+  if (S.current && S.current.n > 0) all.push({ ...S.current, live: true });
+  all.sort((a, b) => asc ? a.peak - b.peak || a.at - b.at : b.peak - a.peak || a.at - b.at);
+  if (!all.length) { el.innerHTML = '<li class="empty">No games yet</li>'; return; }
+  const li = all.findIndex(r => r.live);
+  const rows = li < 0 || li < 6 ? all.slice(0, 6) : all.slice(0, 5).concat([all[li]]);
+  el.innerHTML = rows.map(r => {
+    const rk = all.indexOf(r) + 1;
+    const tag = r.ini || r.name.slice(0, 3).toUpperCase();
+    const nm = r.ini && r.name ? `<em>${esc(r.name)}</em>` : '';
+    return `<li class="${r.live ? 'live' : ''}"><span class="rk">${rk}</span><span class="ini">${esc(tag)}${nm}${r.live ? '<span class="livetag">LIVE</span>' : ''}</span><span class="v">${r.peak}<small>bpm</small></span></li>`;
+  }).join('');
+}
+function renderAll() {
+  $('eventName').textContent = S.event; $('eyebrow').textContent = S.eyebrow; $('machine').textContent = S.machine;
+  $('prizeHi').textContent = S.prizeHi; $('prizeLo').textContent = S.prizeLo;
+  $('gamesCount').textContent = S.games.length;
+  $('upNext').textContent = S.upNext || '--'; $('nextWrap').style.visibility = S.upNext ? 'visible' : 'hidden';
+  renderBoard($('hiBoard'), false); renderBoard($('loBoard'), true);
+  const c = S.current;
+  $('cam').classList.toggle('idle', !c);
+  if (c) {
+    $('whoLabel').textContent = 'Now playing';
+    $('whoName').innerHTML = esc(c.name || c.ini) + (c.name && c.ini ? `<i>${esc(c.ini)}</i>` : '');
+    $('histTitle').textContent = 'This game';
+  } else {
+    $('whoLabel').textContent = S.upNext ? 'Up next' : 'Scare Mode';
+    $('whoName').textContent = S.upNext ? S.upNext : 'Waiting for player';
+    $('histTitle').textContent = 'Heart rate';
+  }
+  $('log').innerHTML = S.log.length ? S.log.map(e => `<span>${esc(e.ts)} · <b>${esc(e.who)}</b> · Spike <i>+${e.amt}</i> → ${e.bpm} bpm</span>`).join('') : '<span>Waiting for the first scare…</span>';
+}
+renderAll();
+
+function zoneOf(b) { if (b < 90) return ['Calm', '#6dffb0']; if (b < 115) return ['Uneasy', '#d8e86a']; if (b < 140) return ['Spooked', '#ff8a3d']; return ['Terrified', '#ff2a45']; }
+
+/* ECG strip, driven by the real BPM */
+const ecg = $('ecg'), ex = ecg.getContext('2d'); const EW = ecg.width, EH = ecg.height;
+const ebuf = new Float32Array(EW); let epos = 0, phase = 0, beatFlag = false, zoneHex = '#8a7f8f';
+const gs = (x, m, w) => Math.exp(-((x - m) * (x - m)) / (2 * w * w));
+const pqrst = p => .12 * gs(p, .1, .025) - .15 * gs(p, .2, .008) + 1 * gs(p, .23, .011) - .28 * gs(p, .26, .01) + .3 * gs(p, .45, .04);
+function drawEcg() {
+  ex.fillStyle = '#07090a'; ex.fillRect(0, 0, EW, EH);
+  ex.strokeStyle = 'rgba(109,255,176,.07)'; ex.lineWidth = 1;
+  for (let x = 0; x < EW; x += 18) { ex.beginPath(); ex.moveTo(x + .5, 0); ex.lineTo(x + .5, EH); ex.stroke(); }
+  for (let y = 0; y < EH; y += 18) { ex.beginPath(); ex.moveTo(0, y + .5); ex.lineTo(EW, y + .5); ex.stroke(); }
+  ex.lineWidth = 3; ex.lineJoin = 'round'; ex.strokeStyle = zoneHex; ex.shadowColor = zoneHex; ex.shadowBlur = 10;
+  ex.beginPath(); let started = false;
+  for (let x = 0; x < EW; x++) {
+    if (x > epos && x < epos + 14) { started = false; continue; }
+    const y = EH * .68 - ebuf[x] * EH * .55;
+    if (!started) { ex.moveTo(x, y); started = true; } else ex.lineTo(x, y);
+  }
+  ex.stroke(); ex.shadowBlur = 0;
+  ex.fillStyle = '#fff'; ex.beginPath(); ex.arc(epos, EH * .68 - ebuf[epos] * EH * .55, 3.5, 0, 7); ex.fill();
+}
+
+/* 90 s history chart */
+const hc = $('hist'), hx = hc.getContext('2d'); const HW = hc.width, HH = hc.height;
+const YMIN = 50, YMAX = 180, pad = { l: 44, r: 10, t: 10, b: 24 };
+const yv = v => pad.t + (1 - (Math.max(YMIN, Math.min(YMAX, v)) - YMIN) / (YMAX - YMIN)) * (HH - pad.t - pad.b);
+function drawHist() {
+  hx.clearRect(0, 0, HW, HH);
+  hx.font = '14px "JetBrains Mono", monospace'; hx.fillStyle = '#8a7f8f'; hx.textAlign = 'right'; hx.textBaseline = 'middle';
+  [60, 90, 120, 150, 180].forEach(v => { const y = yv(v); hx.strokeStyle = 'rgba(236,228,214,.08)'; hx.beginPath(); hx.moveTo(pad.l, y + .5); hx.lineTo(HW - pad.r, y + .5); hx.stroke(); hx.fillText(v, pad.l - 8, y); });
+  hx.textAlign = 'left'; hx.textBaseline = 'alphabetic'; hx.fillText('-90s', pad.l, HH - 4); hx.textAlign = 'right'; hx.fillText('now', HW - pad.r, HH - 4);
+  const pts = hist.filter(v => v != null); if (pts.length < 2) return;
+  const N = 180, w = (HW - pad.l - pad.r) / (N - 1), x0 = HW - pad.r - (hist.length - 1) * w;
+  const grad = hx.createLinearGradient(0, yv(180), 0, yv(60));
+  grad.addColorStop(0, '#ff2a45'); grad.addColorStop(.33, '#ff8a3d'); grad.addColorStop(.6, '#d8e86a'); grad.addColorStop(1, '#6dffb0');
+  hx.beginPath(); let pen = false;
+  hist.forEach((v, i) => { if (v == null) { pen = false; return; } const x = x0 + i * w, y = yv(v); pen ? hx.lineTo(x, y) : hx.moveTo(x, y); pen = true; });
+  hx.strokeStyle = grad; hx.lineWidth = 3; hx.lineJoin = 'round'; hx.stroke();
+  let pi = -1; hist.forEach((v, i) => { if (v != null && (pi < 0 || v > hist[pi])) pi = i; });
+  if (pi >= 0) {
+    const px = x0 + pi * w, py = yv(hist[pi]); hx.fillStyle = '#ff2a45'; hx.beginPath(); hx.arc(px, py, 5, 0, 7); hx.fill();
+    hx.font = '600 15px "JetBrains Mono", monospace'; hx.textAlign = px > HW - 80 ? 'right' : 'left'; hx.fillText(hist[pi], px + (px > HW - 80 ? -8 : 8), py - 8);
+  }
+}
+
+const fmtT = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+let last = performance.now(), uiAcc = 1, lastHist = 0;
+function frame(now) {
+  const dt = Math.max(0, Math.min(.1, (now - last) / 1000)); last = now;
+  const fresh = hrFresh();
+  const samples = Math.round(dt * 160);
+  for (let i = 0; i < samples; i++) {
+    if (fresh) { phase += bpm / 60 / 160; if (phase >= 1) { phase -= 1; beatFlag = true; } }
+    epos = (epos + 1) % EW; ebuf[epos] = (fresh ? pqrst(phase) : 0) + (Math.random() - .5) * .02;
+  }
+  if (beatFlag && !reduce) { $('heart').animate([{ transform: 'scale(1.14)' }, { transform: 'scale(1)' }], { duration: 260, easing: 'ease-out' }); }
+  beatFlag = false;
+  if (now - lastHist > 500) { lastHist = now; hist.push(fresh ? bpm : null); if (hist.length > 180) hist.shift(); }
+  uiAcc += dt;
+  if (uiAcc > .25) {
+    uiAcc = 0;
+    if (fresh) {
+      const [z, c] = zoneOf(bpm); zoneHex = c;
+      $('bpm').textContent = bpm; $('zone').textContent = z; stage.style.setProperty('--zone', c);
+      $('ztick').style.left = Math.max(0, Math.min(100, (bpm - 60) / 120 * 100)) + '%';
+      $('bpmSrc').textContent = 'Live · armband';
+    } else {
+      zoneHex = '#8a7f8f';
+      $('bpm').textContent = '--'; $('zone').textContent = 'No signal'; stage.style.setProperty('--zone', '#8a7f8f');
+      $('bpmSrc').textContent = 'Armband offline';
+    }
+    const c = S.current;
+    if (c && c.n) { $('sPeak').textContent = c.peak; $('sLow').textContent = c.low; $('sAvg').textContent = Math.round(c.sum / c.n); $('gamePeak').textContent = c.peak; }
+    else {
+      const p = hist.filter(v => v != null);
+      $('sPeak').textContent = p.length ? Math.max(...p) : '--'; $('sLow').textContent = p.length ? Math.min(...p) : '--';
+      $('sAvg').textContent = p.length ? Math.round(p.reduce((a, b) => a + b, 0) / p.length) : '--'; $('gamePeak').textContent = '--';
+    }
+    const el = c ? Math.floor((Date.now() - c.start) / 1000) : 0;
+    $('gameTime').textContent = fmtT(el);
+    $('tc').textContent = c ? 'REC ' + [el / 3600, el % 3600 / 60, el % 60].map(v => String(Math.floor(v)).padStart(2, '0')).join(':') : 'STANDBY';
+    $('clock').textContent = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const L = liveInfo();
+    $('faceWrap').classList.toggle('live-ok', L.face); $('pip').classList.toggle('live-ok', L.field);
+    $('lkFace').classList.toggle('on', L.face); $('lkField').classList.toggle('on', L.field); $('lkBand').classList.toggle('on', L.band);
+    $('lkCtl').classList.toggle('on', Date.now() - linkSeen.control < 7000);
+    drawHist();
+  }
+  drawEcg();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+})();
+</script>
+</body></html>

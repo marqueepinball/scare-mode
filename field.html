@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Scare Mode · Playfield Cam</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Creepster&family=Barlow+Semi+Condensed:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="phone.css">
+</head><body>
+<h1>Playfield Cam</h1>
+<p class="sub">Mount over the playfield, back camera pointing down at the flippers. Room <b id="room"></b></p>
+
+<div class="card">
+  <span class="pill" id="tvPill"><i class="dot"></i><span>TV: starting</span></span>
+</div>
+
+<div class="card">
+  <h2>Camera</h2>
+  <video id="preview" autoplay muted playsinline></video>
+  <div class="row" style="margin-top:10px">
+    <select id="camSel"></select>
+    <button id="startCam">Start camera</button>
+  </div>
+  <label for="orient">Shape sent to TV</label>
+  <select id="orient">
+    <option value="portrait">Portrait (phone upright)</option>
+    <option value="landscape">Landscape (phone sideways)</option>
+  </select>
+</div>
+
+<script src="vendor/peerjs.min.js"></script>
+<script src="common.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+$('room').textContent = SM.room;
+let stream = null;
+function pill(el, cls, text) { el.className = 'pill ' + cls; el.querySelector('span').textContent = text; }
+
+const link = SM.client({
+  role: 'field',
+  getStream: () => stream,
+  onStatus: s => { pill($('tvPill'), s === 'connected' ? 'ok' : 'warn', 'TV: ' + s); if (s === 'connected') sendOrient(); },
+});
+function sendOrient() { link.send({ t: 'orient', v: $('orient').value }); }
+$('orient').value = localStorage.getItem('sm-field-orient') || 'portrait';
+$('orient').onchange = () => { localStorage.setItem('sm-field-orient', $('orient').value); sendOrient(); };
+
+async function listCams() {
+  const devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
+  const cur = $('camSel').value;
+  $('camSel').innerHTML = '<option value="">Back camera</option>' +
+    devs.map((d, i) => `<option value="${d.deviceId}">${d.label || 'Camera ' + (i + 1)}</option>`).join('');
+  if (cur) $('camSel').value = cur;
+}
+async function startCam() {
+  try {
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    const id = $('camSel').value;
+    const size = { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } };
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: id ? { deviceId: { exact: id }, ...size } : { facingMode: { ideal: 'environment' }, ...size }
+    });
+    $('preview').srcObject = stream;
+    stream.getVideoTracks().forEach(t => t.onended = () => setTimeout(startCam, 1000));
+    $('startCam').textContent = 'Restart camera';
+    localStorage.setItem('sm-field-cam', id);
+    listCams();
+    link.restream();
+  } catch (e) { alert('Camera failed: ' + e.message); }
+}
+$('startCam').onclick = startCam;
+$('camSel').onchange = startCam;
+
+SM.keepAwake();
+// iPhone/iPod: the camera can stop when the screen locks or Safari is backgrounded
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && (!stream || stream.getVideoTracks().every(t => t.readyState === 'ended'))) startCam(); });
+(async () => {
+  const saved = localStorage.getItem('sm-field-cam') || '';
+  await listCams().catch(() => {});
+  if ([...$('camSel').options].some(o => o.value === saved)) $('camSel').value = saved;
+  startCam();
+})();
+</script>
+</body></html>

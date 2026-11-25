@@ -1,0 +1,30 @@
+:root{--void:#060509;--crypt:#100c13;--crypt-2:#181220;--line:#2a2130;--bone:#ece4d6;--ash:#8a7f8f;--blood:#ff2a45;--ember:#ff8a3d;--ecto:#6dffb0;color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--void);color:var(--bone);font:16px/1.4 "Barlow Semi Condensed","Arial Narrow",system-ui,sans-serif}
+body{padding:16px;padding-top:max(16px,env(safe-area-inset-top));padding-bottom:max(16px,env(safe-area-inset-bottom));max-width:640px;margin:0 auto}
+h1{font-family:"Creepster",Impact,fantasy;color:var(--blood);font-weight:400;font-size:40px;margin:0 0 4px;letter-spacing:1px}
+.sub{color:var(--ash);margin:0 0 16px}
+.card{background:var(--crypt);border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:14px}
+.card h2{margin:0 0 10px;font-size:15px;letter-spacing:.18em;text-transform:uppercase;color:var(--ash);font-weight:600}
+button{font:inherit;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border:0;border-radius:6px;padding:14px 16px;background:var(--crypt-2);color:var(--bone);border:1px solid var(--line);cursor:pointer;min-height:48px}
+button.go{background:var(--blood);border-color:var(--blood);color:#fff}
+button.cool{background:var(--ecto);border-color:var(--ecto);color:var(--void)}
+button:disabled{opacity:.4}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.row>*{flex:1 1 auto}
+input,select{font:inherit;width:100%;padding:12px;border-radius:6px;border:1px solid var(--line);background:#0a080d;color:var(--bone);min-height:48px}
+label{display:block;font-size:14px;color:var(--ash);margin:8px 0 4px;letter-spacing:.06em}
+.pill{display:inline-flex;align-items:center;gap:8px;font-size:14px;letter-spacing:.08em;text-transform:uppercase;padding:4px 10px;border-radius:99px;background:var(--crypt-2);border:1px solid var(--line)}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--ash)}
+.ok .dot{background:var(--ecto);box-shadow:0 0 8px var(--ecto)}
+.bad .dot{background:var(--blood)}
+.warn .dot{background:var(--ember)}
+video{width:100%;border-radius:8px;background:#000;display:block}
+.big{font-family:"Big Shoulders Display",Impact,sans-serif;font-weight:900;font-size:96px;line-height:.9;color:var(--blood)}
+.muted{color:var(--ash);font-size:14px}
+.hide{display:none!important}
+table{width:100%;border-collapse:collapse;font-size:15px}
+td,th{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left}
+th{color:var(--ash);font-weight:600;font-size:13px;letter-spacing:.1em;text-transform:uppercase}
+td button{min-height:0;padding:6px 10px;font-size:12px}
+a{color:var(--ecto)}

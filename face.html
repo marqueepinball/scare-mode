@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Scare Mode · Face Cam</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Creepster&family=Big+Shoulders+Display:wght@900&family=Barlow+Semi+Condensed:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="phone.css">
+</head><body>
+<h1>Face Cam</h1>
+<p class="sub">Mount on the backbox facing the player. Room <b id="room"></b></p>
+
+<div class="card">
+  <div class="row" style="margin-bottom:10px">
+    <span class="pill" id="tvPill"><i class="dot"></i><span>TV: starting</span></span>
+    <span class="pill" id="bandPill"><i class="dot"></i><span>Band: not connected</span></span>
+  </div>
+  <div class="row" style="align-items:flex-end">
+    <div class="big" id="bpm">--</div><div class="muted" style="flex:0 0 auto">BPM</div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Heart rate band</h2>
+  <div class="row">
+    <button class="go" id="connectBand">Connect armband</button>
+    <button id="demo">Demo heartbeat</button>
+  </div>
+  <p class="muted" id="btNote">Put the Polar Verity Sense in heart rate mode (or any Bluetooth heart rate strap), then tap Connect and pick it from the list.</p>
+</div>
+
+<div class="card">
+  <h2>Camera</h2>
+  <video id="preview" autoplay muted playsinline style="transform:scaleX(-1)"></video>
+  <div class="row" style="margin-top:10px">
+    <select id="camSel"></select>
+    <button id="startCam">Start camera</button>
+  </div>
+</div>
+
+<script src="vendor/peerjs.min.js"></script>
+<script src="common.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+$('room').textContent = SM.room;
+let stream = null, bpm = null, demoTimer = null, device = null;
+
+function pill(el, cls, text) { el.className = 'pill ' + cls; el.querySelector('span').textContent = text; }
+
+const link = SM.client({
+  role: 'face',
+  getStream: () => stream,
+  onStatus: s => pill($('tvPill'), s === 'connected' ? 'ok' : 'warn', 'TV: ' + s),
+});
+
+function sendHr(v) {
+  bpm = v; $('bpm').textContent = v;
+  link.send({ t: 'hr', bpm: v, ts: Date.now() });
+}
+
+/* ---------- camera ---------- */
+async function listCams() {
+  const devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
+  const cur = $('camSel').value;
+  $('camSel').innerHTML = '<option value="">Front camera</option>' +
+    devs.map((d, i) => `<option value="${d.deviceId}">${d.label || 'Camera ' + (i + 1)}</option>`).join('');
+  if (cur) $('camSel').value = cur;
+}
+async function startCam() {
+  try {
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    const id = $('camSel').value;
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: id ? { deviceId: { exact: id }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } }
+                : { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } }
+    });
+    $('preview').srcObject = stream;
+    stream.getVideoTracks().forEach(t => t.onended = () => setTimeout(startCam, 1000));
+    $('startCam').textContent = 'Restart camera';
+    localStorage.setItem('sm-face-cam', id);
+    listCams();
+    link.restream();
+  } catch (e) { alert('Camera failed: ' + e.message); }
+}
+$('startCam').onclick = startCam;
+$('camSel').onchange = startCam;
+
+/* ---------- Bluetooth heart rate (standard BLE Heart Rate Service) ---------- */
+function parseHr(dv) {
+  const flags = dv.getUint8(0);
+  return (flags & 1) ? dv.getUint16(1, true) : dv.getUint8(1);
+}
+async function connectGatt() {
+  pill($('bandPill'), 'warn', 'Band: connecting');
+  const server = await device.gatt.connect();
+  const svc = await server.getPrimaryService('heart_rate');
+  const ch = await svc.getCharacteristic('heart_rate_measurement');
+  ch.addEventListener('characteristicvaluechanged', e => {
+    const v = parseHr(e.target.value);
+    if (v > 0) sendHr(v);
+  });
+  await ch.startNotifications();
+  pill($('bandPill'), 'ok', 'Band: ' + (device.name || 'connected'));
+}
+async function reconnectLoop() {
+  for (let i = 0; device && !device.gatt.connected; i++) {
+    try { await connectGatt(); return; }
+    catch (e) { pill($('bandPill'), 'bad', 'Band: lost, retrying'); await new Promise(r => setTimeout(r, Math.min(10000, 1000 + i * 1000))); }
+  }
+}
+$('connectBand').onclick = async () => {
+  if (!navigator.bluetooth) {
+    alert('This browser cannot use Bluetooth. Use Chrome on Android, or the Bluefy browser on iPhone.');
+    return;
+  }
+  try {
+    device = await navigator.bluetooth.requestDevice({ filters: [{ services: ['heart_rate'] }] });
+    device.addEventListener('gattserverdisconnected', () => { pill($('bandPill'), 'bad', 'Band: disconnected'); link.send({ t: 'band', ok: false }); reconnectLoop(); });
+    stopDemo();
+    await connectGatt();
+  } catch (e) {
+    if (e.name !== 'NotFoundError') { pill($('bandPill'), 'bad', 'Band: ' + e.message); reconnectLoop(); }
+  }
+};
+if (!navigator.bluetooth) $('btNote').textContent = 'Bluetooth is not available in this browser. Use Chrome on Android, or the Bluefy browser on iPhone. Demo heartbeat still works.';
+
+/* ---------- demo heartbeat for testing without a band ---------- */
+function stopDemo() { clearInterval(demoTimer); demoTimer = null; $('demo').textContent = 'Demo heartbeat'; }
+$('demo').onclick = () => {
+  if (demoTimer) { stopDemo(); return; }
+  let base = 78, spike = 0, t = 0;
+  demoTimer = setInterval(() => {
+    t++; base += (Math.random() - .5) * 1.5 + (80 - base) * .05;
+    if (Math.random() < .06) spike += 20 + Math.random() * 30;
+    spike *= .88;
+    sendHr(Math.round(base + spike));
+  }, 1000);
+  $('demo').textContent = 'Stop demo';
+  pill($('bandPill'), 'warn', 'Band: demo');
+};
+
+SM.keepAwake();
+// iPhone/iPod: the camera can stop when the screen locks or Safari is backgrounded
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && (!stream || stream.getVideoTracks().every(t => t.readyState === 'ended'))) startCam(); });
+// Try to start the camera straight away (permission is remembered after the first time)
+(async () => {
+  const saved = localStorage.getItem('sm-face-cam') || '';
+  await listCams().catch(() => {});
+  if ([...$('camSel').options].some(o => o.value === saved)) $('camSel').value = saved;
+  startCam();
+})();
+</script>
+</body></html>

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Scare Mode</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Creepster&family=Barlow+Semi+Condensed:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="phone.css">
+</head><body>
+<h1>Scare Mode</h1>
+<p class="sub">Pick what this device is. Every device must use the same room code.</p>
+<div class="card">
+  <label for="room">Room code (one per machine, e.g. table3)</label>
+  <input id="room" autocomplete="off" autocapitalize="none">
+</div>
+<div class="card" style="display:grid;gap:10px">
+  <button class="go" data-p="face.html">Face cam phone (backbox + armband)</button>
+  <button data-p="field.html">Playfield cam phone</button>
+  <button data-p="control.html">Control (your phone)</button>
+  <button data-p="display.html">TV display</button>
+</div>
+<p class="muted">For OptiSigns, add a Web Page app pointing at the TV display link shown after you pick it, for example <code id="ex"></code></p>
+<script>
+const r = document.getElementById('room');
+r.value = new URLSearchParams(location.search).get('room') || localStorage.getItem('sm-room') || 'marquee';
+const clean = () => r.value.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 24) || 'marquee';
+const ex = () => document.getElementById('ex').textContent = new URL('display.html?room=' + clean(), location.href).href;
+r.oninput = ex; ex();
+document.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { location.href = b.dataset.p + '?room=' + clean(); });
+</script>
+</body></html>
