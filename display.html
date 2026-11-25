@@ -446,10 +446,18 @@ function frame(now) {
   }
   if (beatFlag && !reduce) { $('heart').animate([{ transform: 'scale(1.14)' }, { transform: 'scale(1)' }], { duration: 260, easing: 'ease-out' }); }
   beatFlag = false;
-  if (now - lastHist > 500) { lastHist = now; hist.push(fresh ? bpm : null); if (hist.length > 180) hist.shift(); }
-  uiAcc += dt;
-  if (uiAcc > .25) {
-    uiAcc = 0;
+  drawEcg();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// Numbers, boards and chart run on a timer so they keep updating even if a
+// signage player throttles animation frames.
+setInterval(updateUi, 250);
+setInterval(() => { const fresh = hrFresh(); hist.push(fresh ? bpm : null); if (hist.length > 180) hist.shift(); }, 500);
+function updateUi() {
+  {
+    const fresh = hrFresh();
     if (fresh) {
       const [z, c] = zoneOf(bpm); zoneHex = c;
       $('bpm').textContent = bpm; $('zone').textContent = z; stage.style.setProperty('--zone', c);
@@ -477,10 +485,7 @@ function frame(now) {
     $('lkCtl').classList.toggle('on', Date.now() - linkSeen.control < 7000);
     drawHist();
   }
-  drawEcg();
-  requestAnimationFrame(frame);
 }
-requestAnimationFrame(frame);
 })();
 </script>
 </body></html>
