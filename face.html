@@ -34,6 +34,8 @@
     <select id="camSel"></select>
     <button id="startCam">Start camera</button>
   </div>
+  <p class="muted" id="camNote"></p>
+  <p class="muted">Using a GoPro or other USB camera? Plug it into this laptop in webcam mode, then pick it above. The choice is remembered on this device.</p>
 </div>
 
 <script src="vendor/peerjs.min.js"></script>
@@ -57,32 +59,14 @@ function sendHr(v) {
 }
 
 /* ---------- camera ---------- */
-async function listCams() {
-  const devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
-  const cur = $('camSel').value;
-  $('camSel').innerHTML = '<option value="">Front camera</option>' +
-    devs.map((d, i) => `<option value="${d.deviceId}">${d.label || 'Camera ' + (i + 1)}</option>`).join('');
-  if (cur) $('camSel').value = cur;
-}
-async function startCam() {
-  try {
-    if (stream) stream.getTracks().forEach(t => t.stop());
-    const id = $('camSel').value;
-    stream = await navigator.mediaDevices.getUserMedia({
-      audio: false,
-      video: id ? { deviceId: { exact: id }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } }
-                : { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } }
-    });
-    $('preview').srcObject = stream;
-    stream.getVideoTracks().forEach(t => t.onended = () => setTimeout(startCam, 1000));
-    $('startCam').textContent = 'Restart camera';
-    localStorage.setItem('sm-face-cam', id);
-    listCams();
-    link.restream();
-  } catch (e) { alert('Camera failed: ' + e.message); }
-}
-$('startCam').onclick = startCam;
-$('camSel').onchange = startCam;
+const cam = SM.camera({
+  select: $('camSel'), button: $('startCam'), note: $('camNote'),
+  storageKey: 'sm-face-cam', facing: 'user', defaultLabel: 'Phone front camera (default)',
+  size: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
+  onStream: s => { stream = s; $('preview').srcObject = s; link.restream(); },
+  onError: e => alert('Camera failed: ' + e.message),
+});
+const startCam = cam.start;
 
 /* ---------- Bluetooth heart rate (standard BLE Heart Rate Service) ---------- */
 function parseHr(dv) {
@@ -142,11 +126,6 @@ SM.keepAwake();
 // iPhone/iPod: the camera can stop when the screen locks or Safari is backgrounded
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && (!stream || stream.getVideoTracks().every(t => t.readyState === 'ended'))) startCam(); });
 // Try to start the camera straight away (permission is remembered after the first time)
-(async () => {
-  const saved = localStorage.getItem('sm-face-cam') || '';
-  await listCams().catch(() => {});
-  if ([...$('camSel').options].some(o => o.value === saved)) $('camSel').value = saved;
-  startCam();
-})();
+startCam();
 </script>
 </body></html>

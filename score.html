@@ -46,6 +46,8 @@ input[type=range]{padding:0;min-height:36px}
     <select id="camSel"></select>
     <button id="startCam">Start camera</button>
   </div>
+  <p class="muted" id="camNote"></p>
+  <p class="muted">Using a GoPro or other USB camera? Plug it into this laptop in webcam mode, then pick it above. The choice is remembered on this device.</p>
   <label for="dtype">Display type</label>
   <select id="dtype">
     <option value="dmd128">Dot matrix 128 x 32 (most DMD games)</option>
@@ -146,27 +148,14 @@ const work = document.createElement('canvas'), wc = work.getContext('2d', { will
 // Browsers pause muted autoplay video once it scrolls off screen, which would freeze
 // the reader. Playback is started from script instead, and resumed if anything pauses it.
 video.addEventListener('pause', () => { if (stream) setTimeout(() => video.play().catch(() => {}), 50); });
-async function listCams() {
-  const devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
-  const cur = $('camSel').value;
-  $('camSel').innerHTML = '<option value="">Back camera</option>' + devs.map((d, i) => `<option value="${d.deviceId}">${d.label || 'Camera ' + (i + 1)}</option>`).join('');
-  if (cur) $('camSel').value = cur;
-}
-async function startCam() {
-  try {
-    if (stream) stream.getTracks().forEach(t => t.stop());
-    const id = $('camSel').value;
-    const size = { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } };
-    stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: id ? { deviceId: { exact: id }, ...size } : { facingMode: { ideal: 'environment' }, ...size } });
-    video.srcObject = stream;
-    video.play().catch(() => {});
-    stream.getVideoTracks().forEach(t => t.onended = () => setTimeout(startCam, 1000));
-    $('startCam').textContent = 'Restart camera';
-    localStorage.setItem('sm-score-cam', id);
-    listCams();
-  } catch (e) { $('readNote').textContent = 'Camera failed: ' + e.message; }
-}
-$('startCam').onclick = startCam; $('camSel').onchange = startCam;
+const cam = SM.camera({
+  select: $('camSel'), button: $('startCam'), note: $('camNote'),
+  storageKey: 'sm-score-cam', facing: 'environment', defaultLabel: 'Phone back camera (default)',
+  size: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } },
+  onStream: s => { stream = s; video.srcObject = s; video.play().catch(() => {}); },
+  onError: e => { $('readNote').textContent = 'Camera failed: ' + e.message; },
+});
+const startCam = cam.start;
 
 /* ---------- corner handles ---------- */
 let drag = -1, dragPt = null;
@@ -392,11 +381,6 @@ $('file').onchange = async () => {
 setInterval(tick, 160);
 SM.keepAwake();
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && (!stream || stream.getVideoTracks().every(t => t.readyState === 'ended'))) startCam(); });
-(async () => {
-  const saved = localStorage.getItem('sm-score-cam') || '';
-  await listCams().catch(() => {});
-  if ([...$('camSel').options].some(o => o.value === saved)) $('camSel').value = saved;
-  startCam();
-})();
+startCam();
 </script>
 </body></html>
