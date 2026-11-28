@@ -134,7 +134,7 @@ footer .lab{font-family:var(--font-num);font-weight:900;font-size:28px;letter-sp
       <div class="name" id="eventName">Scare Mode Challenge</div>
     </div>
     <div class="meta">
-      <div><span>Machine</span><b id="machine">Table 1</b></div>
+      <div><span>Machine</span><b id="machine"></b></div>
       <div><span>Games</span><b id="gamesCount">0</b></div>
       <div><span>Local</span><b id="clock">--</b></div>
     </div>
@@ -224,14 +224,17 @@ if (SM.qs.get('mirror') === '0') { $('faceVid').classList.remove('mirror'); $('f
 $('roomtag').textContent = 'ROOM ' + SM.room.toUpperCase();
 
 /* ================= state (persisted on this screen) ================= */
+// Default machine label follows the room: room=table3 -> "Table 3"
+function roomLabel() { const m = SM.room.match(/^table(\d+)$/); return m ? 'Table ' + m[1] : SM.room.toUpperCase(); }
 const KEY = 'sm-state-' + SM.room;
 const defaults = () => ({
-  event: 'Scare Mode Challenge', eyebrow: 'Marquee Pinball · Tournament night', machine: 'Table 1',
+  event: 'Scare Mode Challenge', eyebrow: 'Marquee Pinball · Tournament night', machine: roomLabel(),
   prizeHi: 'Scream Queen trophy', prizeLo: 'Nerves of Steel trophy', upNext: '',
   games: [], current: null, log: [], updatedAt: 0
 });
 let S = defaults();
 try { const j = JSON.parse(localStorage.getItem(KEY)); if (j) S = Object.assign(defaults(), j); } catch (e) {}
+if (S.machine === 'Table 1' && SM.room !== 'table1') S.machine = roomLabel();
 function save() { S.updatedAt = Date.now(); try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} broadcast(); renderAll(); }
 
 /* ================= live heart data ================= */
@@ -319,7 +322,7 @@ function startPeer() {
   peer.on('open', () => banner(''));
   peer.on('error', err => {
     console.warn('peer', err.type);
-    if (err.type === 'unavailable-id') banner(`Another screen is already open as room "${SM.room}". Close the other display page (any browser, laptop or TV), phones are talking to it, not this one. Retrying...`);
+    if (err.type === 'unavailable-id') banner(`Another screen is already open as room "${SM.room}". Phones are talking to that one, not this TV. Close the other display page. Retrying...`);
     else if (err.type === 'network' || err.type === 'server-error' || err.type === 'socket-error') banner('TV is offline from the connection server. Retrying...');
     if (err.type === 'unavailable-id' || err.type === 'network' || err.type === 'server-error' || err.type === 'socket-error') {
       try { peer.destroy(); } catch (e) {}
