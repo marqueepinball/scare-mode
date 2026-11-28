@@ -38,7 +38,7 @@ function pill(el, cls, text) { el.className = 'pill ' + cls; el.querySelector('s
 const link = SM.client({
   role: 'field',
   getStream: () => stream,
-  onStatus: s => { pill($('tvPill'), s === 'connected' ? 'ok' : 'warn', 'TV: ' + s); if (s === 'connected') sendOrient(); },
+  onStatus: s => { pill($('tvPill'), s.startsWith('connected') ? 'ok' : 'warn', 'TV: ' + s); if (s === 'connected') sendOrient(); },
   onVideo: s => { $('vidStat').textContent = s; },
 });
 function sendOrient() { link.send({ t: 'orient', v: $('orient').value }); }

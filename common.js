@@ -37,7 +37,7 @@ const SM = (() => {
   /* A phone/control "client": keeps a data link (and optional media call)
    * to the TV alive, reconnecting forever. */
   function client({ role, getStream, onMessage, onStatus, onVideo }) {
-    let peer = null, conn = null, call = null, lastSeen = 0, timer = null, connecting = false;
+    let peer = null, conn = null, call = null, lastSeen = 0, timer = null, connecting = false, tvCode = '';
     const status = s => onStatus && onStatus(s);
     const video = s => onVideo && onVideo(s);
     // Snapshot fallback: if live video never reaches the TV (venue Wi-Fi often
@@ -73,12 +73,13 @@ const SM = (() => {
       });
       conn.on('data', d => {
         lastSeen = Date.now();
+        if (d && d.tv && d.tv !== tvCode) { tvCode = d.tv; status('connected (TV code ' + tvCode + ')'); }
         if (!d || d.t === 'ping') return;
         if (d.t === 'fack') { waitAck = false; return; }
         if (d.t === 'vstat') { onVstat(d.ok); return; }
         if (onMessage) onMessage(d);
       });
-      conn.on('close', () => { status('searching'); });
+      conn.on('close', () => { tvCode = ''; status('searching'); });
       conn.on('error', () => {});
     }
 

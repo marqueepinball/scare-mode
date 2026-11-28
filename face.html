@@ -49,7 +49,7 @@ function pill(el, cls, text) { el.className = 'pill ' + cls; el.querySelector('s
 const link = SM.client({
   role: 'face',
   getStream: () => stream,
-  onStatus: s => pill($('tvPill'), s === 'connected' ? 'ok' : 'warn', 'TV: ' + s),
+  onStatus: s => pill($('tvPill'), s.startsWith('connected') ? 'ok' : 'warn', 'TV: ' + s),
   onVideo: s => { $('vidStat').textContent = s; },
 });
 
