@@ -80,8 +80,8 @@ async function startCam() {
     const id = $('camSel').value;
     stream = await navigator.mediaDevices.getUserMedia({
       audio: false,
-      video: id ? { deviceId: { exact: id }, width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 24, max: 24 } }
-                : { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 24, max: 24 } }
+      video: id ? { deviceId: { exact: id }, width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 15, max: 15 } }
+                : { facingMode: 'user', width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 15, max: 15 } }
     });
     $('preview').srcObject = stream;
     stream.getVideoTracks().forEach(t => t.onended = () => setTimeout(startCam, 1000));
