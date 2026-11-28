@@ -20,6 +20,9 @@
     <select id="camSel"></select>
     <button id="startCam">Start camera</button>
   </div>
+  <div class="row" style="margin-top:8px">
+    <button id="reloadPage" onclick="location.reload()">Refresh page</button>
+  </div>
   <label for="orient">Shape sent to TV</label>
   <select id="orient">
     <option value="portrait">Portrait (phone upright)</option>
@@ -56,7 +59,7 @@ async function startCam() {
   try {
     if (stream) stream.getTracks().forEach(t => t.stop());
     const id = $('camSel').value;
-    const size = { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } };
+    const size = SM.videoSize();
     stream = await navigator.mediaDevices.getUserMedia({
       audio: false,
       video: id ? { deviceId: { exact: id }, ...size } : { facingMode: { ideal: 'environment' }, ...size }

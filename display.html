@@ -388,7 +388,7 @@ function startPeer() {
     if (role !== 'face' && role !== 'field') { call.close(); return; }
     if (calls[role] && calls[role] !== call) { try { calls[role].close(); } catch (e) {} }
     calls[role] = call;
-    call.answer();
+    call.answer(undefined, { sdpTransform: SM.preferH264 });
     call.on('stream', s => {
       const v = role === 'face' ? $('faceVid') : $('fieldVid');
       v.srcObject = s; v.muted = true; v.play().catch(() => {});
