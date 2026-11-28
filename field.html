@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="en"><head>
+<link rel="icon" href="favicon.ico" sizes="any"><link rel="icon" type="image/png" href="icon-192.png"><link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Scare Mode · Playfield Cam</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Creepster&family=Barlow+Semi+Condensed:wght@400;600;700&display=swap">
@@ -18,6 +19,9 @@
   <div class="row" style="margin-top:10px">
     <select id="camSel"></select>
     <button id="startCam">Start camera</button>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <button id="reloadPage" onclick="location.reload()">Refresh page</button>
   </div>
   <p class="muted" id="camNote"></p>
   <p class="muted">Using a GoPro or other USB camera? Plug it into this laptop in webcam mode, then pick it above. The choice is remembered on this device.</p>
@@ -39,7 +43,7 @@ function pill(el, cls, text) { el.className = 'pill ' + cls; el.querySelector('s
 const link = SM.client({
   role: 'field',
   getStream: () => stream,
-  onStatus: s => { pill($('tvPill'), s === 'connected' ? 'ok' : 'warn', 'TV: ' + s); if (s === 'connected') sendOrient(); },
+  onStatus: s => { pill($('tvPill'), s.startsWith('connected') ? 'ok' : 'warn', 'TV: ' + s); if (s === 'connected') { sendOrient(); zoom && zoom.send(); } },
 });
 function sendOrient() { link.send({ t: 'orient', v: $('orient').value }); }
 $('orient').value = localStorage.getItem('sm-field-orient') || 'portrait';
@@ -48,11 +52,12 @@ $('orient').onchange = () => { localStorage.setItem('sm-field-orient', $('orient
 const cam = SM.camera({
   select: $('camSel'), button: $('startCam'), note: $('camNote'),
   storageKey: 'sm-field-cam', facing: 'environment', defaultLabel: 'Phone back camera (default)',
-  size: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
-  onStream: s => { stream = s; $('preview').srcObject = s; link.restream(); },
+  size: SM.videoSize(),
+  onStream: s => { stream = s; $('preview').srcObject = s; link.restream(); zoom.apply(); },
   onError: e => alert('Camera failed: ' + e.message),
 });
 const startCam = cam.start;
+const zoom = SM.zoomControl({ role: 'field', getStream: () => stream, link, preview: $('preview'), after: $('startCam').parentNode, mirror: false });
 
 SM.keepAwake();
 // iPhone/iPod: the camera can stop when the screen locks or Safari is backgrounded

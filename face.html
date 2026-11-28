@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="en"><head>
+<link rel="icon" href="favicon.ico" sizes="any"><link rel="icon" type="image/png" href="icon-192.png"><link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Scare Mode · Face Cam</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Creepster&family=Big+Shoulders+Display:wght@900&family=Barlow+Semi+Condensed:wght@400;600;700&display=swap">
@@ -16,6 +17,7 @@
   <div class="row" style="align-items:flex-end">
     <div class="big" id="bpm">--</div><div class="muted" style="flex:0 0 auto">BPM</div>
   </div>
+  <div id="hrDiag" style="font-size:15px;margin-top:8px;line-height:1.5">Sent to TV: 0 · TV received: nothing yet</div>
 </div>
 
 <div class="card">
@@ -34,6 +36,9 @@
     <select id="camSel"></select>
     <button id="startCam">Start camera</button>
   </div>
+  <div class="row" style="margin-top:8px">
+    <button id="reloadPage" onclick="location.reload()">Refresh page</button>
+  </div>
   <p class="muted" id="camNote"></p>
   <p class="muted">Using a GoPro or other USB camera? Plug it into this laptop in webcam mode, then pick it above. The choice is remembered on this device.</p>
 </div>
@@ -50,23 +55,33 @@ function pill(el, cls, text) { el.className = 'pill ' + cls; el.querySelector('s
 const link = SM.client({
   role: 'face',
   getStream: () => stream,
-  onStatus: s => pill($('tvPill'), s === 'connected' ? 'ok' : 'warn', 'TV: ' + s),
+  onStatus: s => { pill($('tvPill'), s.startsWith('connected') ? 'ok' : 'warn', 'TV: ' + s); if (s === 'connected' && zoom) zoom.send(); },
+  onMessage: d => { if (d.t === 'gotHr') { tvGot = d.bpm; tvGotAt = Date.now(); hrDiag(); } },
 });
 
+let sentCount = 0, tvGot = null, tvGotAt = 0;
+function hrDiag() {
+  const age = tvGotAt ? Math.round((Date.now() - tvGotAt) / 1000) : null;
+  $('hrDiag').innerHTML = `Sent to TV: <b>${sentCount}</b> · TV received: ` +
+    (tvGot == null ? '<b style="color:#ff6b6b">nothing yet</b>' : `<b style="color:${age < 5 ? '#5ee39a' : '#ff6b6b'}">${tvGot} bpm, ${age}s ago</b>`);
+}
+setInterval(hrDiag, 1000);
 function sendHr(v) {
   bpm = v; $('bpm').textContent = v;
   link.send({ t: 'hr', bpm: v, ts: Date.now() });
+  sentCount++; hrDiag();
 }
 
 /* ---------- camera ---------- */
 const cam = SM.camera({
   select: $('camSel'), button: $('startCam'), note: $('camNote'),
   storageKey: 'sm-face-cam', facing: 'user', defaultLabel: 'Phone front camera (default)',
-  size: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
-  onStream: s => { stream = s; $('preview').srcObject = s; link.restream(); },
+  size: SM.videoSize(),
+  onStream: s => { stream = s; $('preview').srcObject = s; link.restream(); zoom.apply(); },
   onError: e => alert('Camera failed: ' + e.message),
 });
 const startCam = cam.start;
+const zoom = SM.zoomControl({ role: 'face', getStream: () => stream, link, preview: $('preview'), after: $('startCam').parentNode, mirror: true });
 
 /* ---------- Bluetooth heart rate (standard BLE Heart Rate Service) ---------- */
 function parseHr(dv) {

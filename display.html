@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="en"><head>
+<link rel="icon" href="favicon.ico" sizes="any"><link rel="icon" type="image/png" href="icon-192.png"><link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Scare Mode TV</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -21,7 +22,7 @@ body{background:var(--void);color:var(--bone);font-family:var(--font-body);overf
   background:radial-gradient(1200px 700px at 50% 40%,#1a0f18 0%,var(--void) 70%);
   display:grid;grid-template-rows:96px 1fr 72px;gap:24px;padding:36px 40px;box-sizing:border-box;font-variant-numeric:tabular-nums}
 header{display:grid;grid-template-columns:440px 1fr 520px;gap:32px;align-items:center}
-.mark{font-family:var(--font-mark);font-size:84px;line-height:.9;color:var(--blood);letter-spacing:2px;text-shadow:0 0 24px rgba(255,42,69,.45)}
+.mark{font-family:var(--font-mark);font-size:50px;line-height:.92;white-space:nowrap;color:var(--blood);letter-spacing:2px;text-shadow:0 0 24px rgba(255,42,69,.45)}
 .event{text-align:center;display:flex;flex-direction:column;gap:6px;min-width:0}
 .event .eyebrow{font-size:20px;letter-spacing:.3em;text-transform:uppercase;color:var(--ash)}
 .event .name{font-family:var(--font-num);font-weight:700;font-size:44px;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -124,19 +125,19 @@ footer .lab{font-family:var(--font-num);font-weight:900;font-size:28px;letter-sp
 .links{display:flex;gap:10px}
 .links i{display:block;width:12px;height:12px;border-radius:50%;background:#3a2f3f}
 .links i.on{background:var(--ecto);box-shadow:0 0 6px var(--ecto)}
-#roomtag{position:absolute;right:44px;bottom:6px;font-family:var(--font-mono);font-size:14px;color:#4a3f4f;letter-spacing:.1em}
+#roomtag{position:absolute;right:44px;bottom:6px;font-family:var(--font-mono);font-size:16px;color:#8a7f8f;letter-spacing:.1em}
 @media (prefers-reduced-motion:reduce){.rec{animation:none}.cam.scared .flash,.cam .flash,.spike{transition:none!important}}
 </style>
 </head><body>
 <div id="stage">
   <header>
-    <div class="mark">Scare Mode</div>
+    <div class="mark">Marquee<br>Scare Mode</div>
     <div class="event">
       <div class="eyebrow" id="eyebrow">Marquee Pinball · Tournament night</div>
       <div class="name" id="eventName">Scare Mode Challenge</div>
     </div>
     <div class="meta">
-      <div><span>Machine</span><b id="machine">Table 1</b></div>
+      <div><span>Machine</span><b id="machine"></b></div>
       <div><span>Games</span><b id="gamesCount">0</b></div>
       <div><span>Local</span><b id="clock">--</b></div>
     </div>
@@ -223,17 +224,21 @@ function fit() { const s = Math.min(innerWidth / 1920, innerHeight / 1080); stag
 addEventListener('resize', fit); fit();
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 if (SM.qs.get('mirror') === '0') $('faceVid').classList.remove('mirror');
-$('roomtag').textContent = 'ROOM ' + SM.room.toUpperCase();
+const TVCODE = Math.random().toString(36).slice(2, 5).toUpperCase();
+$('roomtag').textContent = 'ROOM ' + SM.room.toUpperCase() + ' · TV CODE ' + TVCODE;
 
 /* ================= state (persisted on this screen) ================= */
+// Default machine label follows the room: room=table3 -> "Table 3"
+function roomLabel() { const m = SM.room.match(/^table(\d+)$/); return m ? 'Table ' + m[1] : SM.room.toUpperCase(); }
 const KEY = 'sm-state-' + SM.room;
 const defaults = () => ({
-  event: 'Scare Mode Challenge', eyebrow: 'Marquee Pinball · Tournament night', machine: 'Table 1',
+  event: 'Scare Mode Challenge', eyebrow: 'Marquee Pinball · Tournament night', machine: roomLabel(),
   prizeHi: 'Scream Queen trophy', prizeLo: 'Nerves of Steel trophy', upNext: '',
   games: [], current: null, log: [], updatedAt: 0
 });
 let S = defaults();
 try { const j = JSON.parse(localStorage.getItem(KEY)); if (j) S = Object.assign(defaults(), j); } catch (e) {}
+if (S.machine === 'Table 1' && SM.room !== 'table1') S.machine = roomLabel();
 function save() { S.updatedAt = Date.now(); try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} broadcast(); renderAll(); }
 
 /* ================= live heart data ================= */
@@ -329,10 +334,16 @@ const conns = new Map(); // conn -> {role, lastSeen}
 const calls = {};        // role -> MediaConnection
 const linkSeen = { face: 0, field: 0, control: 0, score: 0 };
 
+const netBanner = document.createElement('div');
+netBanner.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:99;padding:14px 20px;font:700 22px/1.3 system-ui,sans-serif;background:#b3001e;color:#fff;text-align:center;display:none';
+document.body.appendChild(netBanner);
+function banner(t) { netBanner.textContent = t || ''; netBanner.style.display = t ? 'block' : 'none'; }
 function startPeer() {
   peer = new Peer(SM.tvId, SM.peerOptions());
+  peer.on('open', () => banner(''));
   peer.on('error', err => {
     console.warn('peer', err.type);
+    if (err.type === 'unavailable-id') banner(`Another screen is already open as room "${SM.room}". Phones are talking to that one, not this TV. Close the other display page. Retrying...`);
     if (err.type === 'unavailable-id' || err.type === 'network' || err.type === 'server-error' || err.type === 'socket-error') {
       try { peer.destroy(); } catch (e) {}
       setTimeout(startPeer, 4000);
@@ -349,10 +360,16 @@ function startPeer() {
       const info = conns.get(conn); if (info) info.lastSeen = Date.now();
       linkSeen[role] = Date.now();
       if (!m || !m.t) return;
-      if (role === 'face' && m.t === 'hr') onHr(m.bpm);
+      if (role === 'face' && m.t === 'hr') { onHr(m.bpm); try { conn.send({ t: 'gotHr', bpm: m.bpm, tv: TVCODE }); } catch (e) {} }
       else if (role === 'face' && m.t === 'band' && !m.ok) lastHr = 0;
       else if (role === 'score' && m.t === 'score') onScore(m.v);
       else if (role === 'score' && m.t === 'mode') onMode(m.label);
+      else if ((role === 'face' || role === 'field') && m.t === 'zoom') {
+        const z = Math.max(1, Math.min(4, Number(m.v) || 1));
+        const v = role === 'face' ? $('faceVid') : $('fieldVid');
+        const flip = role === 'face' && v.classList.contains('mirror');
+        v.style.transform = z === 1 ? '' : `scale(${flip ? -z : z}, ${z})`;
+      }
       else if (role === 'field' && m.t === 'orient') $('pip').classList.toggle('landscape', m.v === 'landscape');
       else if (role === 'control') command(m);
     });
@@ -364,7 +381,7 @@ function startPeer() {
     if (role !== 'face' && role !== 'field') { call.close(); return; }
     if (calls[role] && calls[role] !== call) { try { calls[role].close(); } catch (e) {} }
     calls[role] = call;
-    call.answer();
+    call.answer(undefined, { sdpTransform: SM.preferH264 });
     call.on('stream', s => {
       const v = role === 'face' ? $('faceVid') : $('fieldVid');
       v.srcObject = s; v.muted = true; v.play().catch(() => {});
@@ -387,7 +404,7 @@ setInterval(() => {
   const now = Date.now();
   for (const [c, i] of conns) {
     if (now - i.lastSeen > 8000) { try { c.close(); } catch (e) {} conns.delete(c); continue; }
-    if (c.open) { try { c.send(i.role === 'control' ? { t: 'live', live: liveInfo() } : { t: 'ping' }); } catch (e) {} }
+    if (c.open) { try { c.send(i.role === 'control' ? { t: 'live', live: liveInfo() } : { t: 'ping', tv: TVCODE }); } catch (e) {} }
   }
   // drop a video whose phone has gone quiet
   ['face', 'field'].forEach(r => { if (calls[r] && now - linkSeen[r] > 10000) { try { calls[r].close(); } catch (e) {} } });
