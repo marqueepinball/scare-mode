@@ -375,7 +375,7 @@ function startPeer() {
       linkSeen[role] = Date.now();
       if (!m || !m.t) return;
       if ((role === 'face' || role === 'field') && m.t === 'frame') { try { showFrame(role, m.b); } catch (e) {} try { conn.send({ t: 'fack' }); } catch (e) {} return; }
-      if (role === 'face' && m.t === 'hr') onHr(m.bpm);
+      if (role === 'face' && m.t === 'hr') { onHr(m.bpm); try { conn.send({ t: 'gotHr', bpm: m.bpm, tv: TVCODE }); } catch (e) {} }
       else if (role === 'face' && m.t === 'band' && !m.ok) lastHr = 0;
       else if (role === 'field' && m.t === 'orient') $('pip').classList.toggle('landscape', m.v === 'landscape');
       else if (role === 'control') command(m);
@@ -419,7 +419,9 @@ setInterval(() => {
   // track whether live video is moving; show snapshots only when it is not
   ['face', 'field'].forEach(r => {
     const v = vidEl(r);
-    if (v.srcObject && v.currentTime !== vidTrack[r].t) { vidTrack[r].t = v.currentTime; vidTrack[r].at = now; }
+    // count decoded frames (currentTime keeps ticking on a frozen WebRTC stream)
+    const q = v.getVideoPlaybackQuality ? v.getVideoPlaybackQuality().totalVideoFrames : v.currentTime;
+    if (v.srcObject && q !== vidTrack[r].t) { vidTrack[r].t = q; vidTrack[r].at = now; }
     if (v.srcObject && v.paused) v.play().catch(() => {});
     const wrap = r === 'face' ? $('faceWrap') : $('pip');
     wrap.classList.toggle('snapping', !videoLive(r) && now - frameSeen[r] < 3000);

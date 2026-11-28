@@ -17,6 +17,7 @@
   <div class="row" style="align-items:flex-end">
     <div class="big" id="bpm">--</div><div class="muted" style="flex:0 0 auto">BPM</div>
   </div>
+  <div id="hrDiag" style="font-size:15px;margin-top:8px;line-height:1.5">Sent to TV: 0 · TV received: nothing yet</div>
 </div>
 
 <div class="card">
@@ -51,11 +52,20 @@ const link = SM.client({
   getStream: () => stream,
   onStatus: s => pill($('tvPill'), s.startsWith('connected') ? 'ok' : 'warn', 'TV: ' + s),
   onVideo: s => { $('vidStat').textContent = s; },
+  onMessage: d => { if (d.t === 'gotHr') { tvGot = d.bpm; tvGotAt = Date.now(); hrDiag(); } },
 });
 
+let sentCount = 0, tvGot = null, tvGotAt = 0;
+function hrDiag() {
+  const age = tvGotAt ? Math.round((Date.now() - tvGotAt) / 1000) : null;
+  $('hrDiag').innerHTML = `Sent to TV: <b>${sentCount}</b> · TV received: ` +
+    (tvGot == null ? '<b style="color:#ff6b6b">nothing yet</b>' : `<b style="color:${age < 5 ? '#5ee39a' : '#ff6b6b'}">${tvGot} bpm, ${age}s ago</b>`);
+}
+setInterval(hrDiag, 1000);
 function sendHr(v) {
   bpm = v; $('bpm').textContent = v;
   link.send({ t: 'hr', bpm: v, ts: Date.now() });
+  sentCount++; hrDiag();
 }
 
 /* ---------- camera ---------- */
