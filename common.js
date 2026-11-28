@@ -11,8 +11,26 @@ const SM = (() => {
   try { localStorage.setItem('sm-room', room); } catch (e) {}
 
   // Optional self-hosted signaling server: ?server=host:port[:path][:secure]
+  // Relay (TURN) servers for phones that can't reach the TV directly (e.g. Android Chrome).
+  // Paste the ICE servers array from the TURN provider here.
+  const TURN_SERVERS = [
+    { urls: 'stun:stun.relay.metered.ca:80' },
+    { urls: 'turn:global.relay.metered.ca:80', username: 'b6da8b5add71e6c906421fea', credential: 'FJlexxDMZ3zWHgjk' },
+    { urls: 'turn:global.relay.metered.ca:80?transport=tcp', username: 'b6da8b5add71e6c906421fea', credential: 'FJlexxDMZ3zWHgjk' },
+    { urls: 'turn:global.relay.metered.ca:443', username: 'b6da8b5add71e6c906421fea', credential: 'FJlexxDMZ3zWHgjk' },
+    { urls: 'turns:global.relay.metered.ca:443?transport=tcp', username: 'b6da8b5add71e6c906421fea', credential: 'FJlexxDMZ3zWHgjk' },
+  ];
+  // Optional extra relay from the link: ?turn=turn:host:port|username|password
+  function iceServers() {
+    const list = [{ urls: 'stun:stun.l.google.com:19302' }, ...TURN_SERVERS];
+    const t = qs.get('turn');
+    if (t) { const [urls, username, credential] = t.split('|'); list.push({ urls, username, credential }); }
+    return list;
+  }
+
   function peerOptions() {
     const o = { debug: 1 };
+    if (TURN_SERVERS.length || qs.get('turn')) o.config = { iceServers: iceServers() };
     const s = qs.get('server');
     if (s) {
       const [host, port, path, secure] = s.split(':');
