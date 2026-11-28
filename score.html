@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="en"><head>
+<link rel="icon" href="favicon.ico" sizes="any"><link rel="icon" type="image/png" href="icon-192.png"><link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Scare Mode · Score Cam</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Creepster&family=Big+Shoulders+Display:wght@900&family=Barlow+Semi+Condensed:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="phone.css">
+<style>
+.vwrap{position:relative;touch-action:none;user-select:none;-webkit-user-select:none}
+.vwrap canvas{position:absolute;inset:0;width:100%;height:100%}
+#disp,#crop{width:100%;display:block;border-radius:6px;background:#000;image-rendering:pixelated;touch-action:none}
+#crop{margin-top:8px}
+.score{font-family:"Big Shoulders Display",Impact,sans-serif;font-weight:900;font-size:64px;line-height:1;color:var(--ecto);letter-spacing:.02em;word-break:break-all}
+.score.stale{color:var(--ash)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
+.chips b{width:34px;height:40px;display:flex;align-items:center;justify-content:center;border-radius:5px;border:1px solid var(--line);color:var(--ash);font-size:20px}
+.chips b.on{background:var(--ecto);border-color:var(--ecto);color:var(--void)}
+.step{display:inline-block;background:var(--blood);color:#fff;border-radius:4px;padding:0 7px;margin-right:6px}
+.scenes div{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--line)}
+.scenes div span{flex:1}
+.scenes div i{font-style:normal;font-family:ui-monospace,Menlo,monospace;color:var(--ash);width:48px;text-align:right}
+.scenes div.hit i{color:var(--ecto)}
+.scenes button{min-height:0;padding:6px 10px;font-size:12px}
+input[type=range]{padding:0;min-height:36px}
+.frozen #disp,.frozen #crop{outline:3px solid var(--ember)}
+</style>
+</head><body>
+<h1>Score Cam</h1>
+<p class="sub">Aim the back camera at the score display. Only the numbers go to the TV, never this video. Room <b id="room"></b></p>
+
+<div class="card">
+  <div class="row" style="margin-bottom:8px">
+    <span class="pill" id="tvPill"><i class="dot"></i><span>TV: starting</span></span>
+    <span class="pill" id="readPill"><i class="dot"></i><span>Not set up</span></span>
+  </div>
+  <div class="score stale" id="score">--</div>
+  <div class="muted" id="readNote">Follow steps 1 to 3 below.</div>
+</div>
+
+<div class="card">
+  <h2><span class="step">1</span>Camera and screen corners</h2>
+  <div class="vwrap" id="vwrap">
+    <video id="video" muted playsinline style="width:100%;display:block;border-radius:8px;background:#000"></video>
+    <canvas id="ov"></canvas>
+  </div>
+  <div class="row" style="margin-top:10px">
+    <select id="camSel"></select>
+    <button id="startCam">Start camera</button>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <button id="reloadPage" onclick="location.reload()">Refresh page</button>
+  </div>
+  <label for="dtype">Display type</label>
+  <select id="dtype">
+    <option value="dmd128">Dot matrix 128 x 32 (most DMD games)</option>
+    <option value="dmd192">Dot matrix 192 x 64</option>
+    <option value="lcd">LCD screen 16:9</option>
+  </select>
+  <p class="muted">Drag the four green corners onto the four corners of the display's glowing area. For a dot matrix, put each corner on the centre of the corner dot. A zoom bubble helps while you drag.</p>
+  <div class="row"><button id="resetCorners">Reset corners</button></div>
+</div>
+
+<div class="card" id="boxCard">
+  <h2><span class="step">2</span>Box the score</h2>
+  <canvas id="disp"></canvas>
+  <p class="muted">The display, straightened. Drag a box around just the score digits, with a little space around them. Leave out "Player 1", ball count and other text.</p>
+  <label for="mode">Digit colour</label>
+  <select id="mode">
+    <option value="bright">Bright digits on dark background</option>
+    <option value="dark">Dark digits on light background</option>
+    <option value="color">Match a colour (tap a digit above after choosing)</option>
+  </select>
+  <div id="colorRow" class="hide">
+    <label for="tol">Colour tolerance</label><input type="range" id="tol" min="20" max="140" value="70">
+  </div>
+  <div id="blurRow">
+    <label for="blur">Smoothing</label><input type="range" id="blur" min="0" max="4" value="0">
+  </div>
+  <canvas id="crop"></canvas>
+  <p class="muted">What the reader sees. Green boxes are digits it is sure about, red ones it is not.</p>
+</div>
+
+<div class="card">
+  <h2><span class="step">3</span>Teach the digits</h2>
+  <div class="chips" id="chips"></div>
+  <p class="muted">When a score is showing and steady, tap <b>Freeze</b>, type the number you see, and tap <b>Learn</b>. Repeat until all ten digits are green. Scores often switch to a smaller font once they get long, so teach a short score and a long one. Attract mode high scores are a quick way to do it.</p>
+  <div class="row"><button id="freeze">Freeze</button></div>
+  <div class="row" style="margin-top:10px">
+    <input id="typed" inputmode="numeric" autocomplete="off" placeholder="Score shown, e.g. 12,450,330">
+    <button class="go" id="learn" style="flex:0 0 auto">Learn</button>
+  </div>
+  <p class="muted" id="learnMsg"></p>
+  <label for="strict">Strictness</label><input type="range" id="strict" min="0" max="4" value="2">
+  <p class="muted">Higher rejects more frames but almost never misreads. Lower if it rarely reads a score it has been taught.</p>
+  <div class="row"><button id="forget">Forget digits</button></div>
+</div>
+
+<div class="card">
+  <h2><span class="step">4</span>Modes and awards (optional)</h2>
+  <p class="muted">When a screen you want to call out is on the display (Multiball, Jackpot, a mode start), tap Freeze, type a name, and tap Capture. When that screen shows up again the TV announces it. Works best for screens that hold still for a moment.</p>
+  <div class="row">
+    <input id="sceneName" autocomplete="off" placeholder="MULTIBALL">
+    <button id="capture" style="flex:0 0 auto">Capture</button>
+  </div>
+  <div class="scenes" id="scenes"></div>
+</div>
+
+<div class="card">
+  <h2>Setup backup</h2>
+  <p class="muted">The setup is saved on this phone for this room. Download it to reuse on another phone or machine of the same model.</p>
+  <div class="row">
+    <button id="dl">Download setup</button>
+    <button id="ul">Load setup</button>
+    <input type="file" id="file" accept=".json,application/json" class="hide">
+  </div>
+</div>
+
+<script src="vendor/peerjs.min.js"></script>
+<script src="common.js"></script>
+<script src="scorereader.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const SR = ScoreReader;
+$('room').textContent = SM.room;
+const KEY = 'sm-score-' + SM.room;
+const TYPES = { dmd128: { cols: 128, rows: 32, aspect: 4 }, dmd192: { cols: 192, rows: 64, aspect: 3 }, lcd: { aspect: 16 / 9 } };
+const STRICT = [.2, .17, .14, .11, .085];
+const defaults = () => ({ type: 'dmd128', corners: [[.2, .38], [.8, .38], [.8, .62], [.2, .62]], box: { x: .05, y: .2, w: .9, h: .6 }, mode: 'bright', color: [255, 255, 255], tol: 70, blur: 0, strict: 2, T: {}, scenes: [] });
+let C = defaults();
+try { const j = JSON.parse(localStorage.getItem(KEY)); if (j) C = Object.assign(defaults(), j); } catch (e) {}
+function save() { try { localStorage.setItem(KEY, JSON.stringify(C)); } catch (e) {} }
+
+let stream = null, frozen = null, last = null, pickColor = false;
+const tracker = SR.Tracker();
+const sceneState = {};
+function pill(el, cls, text) { el.className = 'pill ' + cls; el.querySelector('span').textContent = text; }
+
+/* ---------- link to the TV (data only, no video) ---------- */
+const link = SM.client({
+  role: 'score',
+  onStatus: s => { const on = s.startsWith('connected'); pill($('tvPill'), on ? 'ok' : 'warn', 'TV: ' + s); if (on) sendScore(); },
+  onMessage: m => { if (m.t === 'reset') { tracker.reset(); showScore(); } },
+});
+function sendScore() { if (tracker.value !== null) link.send({ t: 'score', v: tracker.value }); }
+setInterval(sendScore, 3000);
+
+/* ---------- camera ---------- */
+const video = $('video'), ov = $('ov'), oc = ov.getContext('2d');
+const work = document.createElement('canvas'), wc = work.getContext('2d', { willReadFrequently: true });
+// Browsers pause muted autoplay video once it scrolls off screen, which would freeze
+// the reader. Playback is started from script instead, and resumed if anything pauses it.
+video.addEventListener('pause', () => { if (stream) setTimeout(() => video.play().catch(() => {}), 50); });
+async function listCams() {
+  const devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
+  const cur = $('camSel').value;
+  $('camSel').innerHTML = '<option value="">Back camera</option>' + devs.map((d, i) => `<option value="${d.deviceId}">${d.label || 'Camera ' + (i + 1)}</option>`).join('');
+  if (cur) $('camSel').value = cur;
+}
+async function startCam() {
+  try {
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    const id = $('camSel').value;
+    const size = { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } };
+    stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: id ? { deviceId: { exact: id }, ...size } : { facingMode: { ideal: 'environment' }, ...size } });
+    video.srcObject = stream;
+    video.play().catch(() => {});
+    stream.getVideoTracks().forEach(t => t.onended = () => setTimeout(startCam, 1000));
+    $('startCam').textContent = 'Restart camera';
+    localStorage.setItem('sm-score-cam', id);
+    listCams();
+  } catch (e) { $('readNote').textContent = 'Camera failed: ' + e.message; }
+}
+$('startCam').onclick = startCam; $('camSel').onchange = startCam;
+
+/* ---------- corner handles ---------- */
+let drag = -1, dragPt = null;
+function sizeOverlay() { const r = video.getBoundingClientRect(); const d = devicePixelRatio || 1; ov.width = Math.round(r.width * d); ov.height = Math.round(r.height * d); }
+function drawOverlay() {
+  if (ov.width !== Math.round(video.clientWidth * (devicePixelRatio || 1))) sizeOverlay();
+  const W = ov.width, H = ov.height, d = devicePixelRatio || 1;
+  oc.clearRect(0, 0, W, H);
+  const P = C.corners.map(([u, v]) => [u * W, v * H]);
+  oc.lineWidth = 2 * d; oc.strokeStyle = '#6dffb0'; oc.beginPath(); P.forEach((p, i) => i ? oc.lineTo(...p) : oc.moveTo(...p)); oc.closePath(); oc.stroke();
+  // score box outline inside the quad
+  if (video.videoWidth) {
+    const M = SR.quadMap(P), b = C.box, q = [[b.x, b.y], [b.x + b.w, b.y], [b.x + b.w, b.y + b.h], [b.x, b.y + b.h]].map(([u, v]) => M(u, v));
+    oc.strokeStyle = '#ff8a3d'; oc.beginPath(); q.forEach((p, i) => i ? oc.lineTo(...p) : oc.moveTo(...p)); oc.closePath(); oc.stroke();
+  }
+  P.forEach((p, i) => { oc.fillStyle = i === drag ? '#fff' : '#6dffb0'; oc.beginPath(); oc.arc(p[0], p[1], 9 * d, 0, 7); oc.fill(); oc.strokeStyle = '#000'; oc.lineWidth = 2 * d; oc.stroke(); });
+  if (drag >= 0 && video.videoWidth) {
+    // zoom bubble
+    const [px, py] = P[drag], R = 60 * d, z = 4, sx = video.videoWidth / W, sy = video.videoHeight / H;
+    const bx = px < W / 2 ? W - R - 8 * d : R + 8 * d, by = R + 8 * d;
+    oc.save(); oc.beginPath(); oc.arc(bx, by, R, 0, 7); oc.clip();
+    oc.imageSmoothingEnabled = false;
+    oc.drawImage(video, (px - R / z) * sx, (py - R / z) * sy, (2 * R / z) * sx, (2 * R / z) * sy, bx - R, by - R, 2 * R, 2 * R);
+    oc.strokeStyle = '#fff'; oc.lineWidth = 1 * d; oc.beginPath(); oc.moveTo(bx - R, by); oc.lineTo(bx + R, by); oc.moveTo(bx, by - R); oc.lineTo(bx, by + R); oc.stroke();
+    oc.restore(); oc.strokeStyle = '#6dffb0'; oc.lineWidth = 3 * d; oc.beginPath(); oc.arc(bx, by, R, 0, 7); oc.stroke();
+  }
+}
+function ptOf(e) { const r = ov.getBoundingClientRect(); return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height]; }
+ov.addEventListener('pointerdown', e => {
+  const [u, v] = ptOf(e), r = ov.getBoundingClientRect();
+  let best = -1, bd = 1e9;
+  C.corners.forEach(([cu, cv], i) => { const dd = Math.hypot((cu - u) * r.width, (cv - v) * r.height); if (dd < bd) { bd = dd; best = i; } });
+  if (bd < 60) { drag = best; dragPt = [u, v]; ov.setPointerCapture(e.pointerId); e.preventDefault(); }
+});
+ov.addEventListener('pointermove', e => {
+  if (drag < 0) return;
+  const [u, v] = ptOf(e);
+  // move relative to the touch start so the finger does not hide the corner
+  const c = C.corners[drag]; c[0] = Math.max(0, Math.min(1, c[0] + (u - dragPt[0]) * .5)); c[1] = Math.max(0, Math.min(1, c[1] + (v - dragPt[1]) * .5)); dragPt = [u, v];
+});
+ov.addEventListener('pointerup', () => { if (drag >= 0) { drag = -1; save(); } });
+ov.addEventListener('pointercancel', () => { drag = -1; });
+$('resetCorners').onclick = () => { C.corners = defaults().corners; save(); };
+
+/* ---------- display type & ink settings ---------- */
+function syncControls() {
+  $('dtype').value = C.type; $('mode').value = C.mode; $('tol').value = C.tol; $('blur').value = C.blur; $('strict').value = C.strict;
+  $('colorRow').classList.toggle('hide', C.mode !== 'color');
+  $('blurRow').classList.toggle('hide', C.type !== 'lcd');
+}
+syncControls();
+$('dtype').onchange = () => { C.type = $('dtype').value; save(); syncControls(); };
+$('mode').onchange = () => { C.mode = $('mode').value; pickColor = C.mode === 'color'; if (pickColor) $('readNote').textContent = 'Tap a digit in the straightened display to pick its colour.'; save(); syncControls(); };
+$('tol').oninput = () => { C.tol = +$('tol').value; save(); };
+$('blur').oninput = () => { C.blur = +$('blur').value; save(); };
+$('strict').oninput = () => { C.strict = +$('strict').value; save(); };
+
+/* ---------- score box on the straightened display ---------- */
+const disp = $('disp'), dc = disp.getContext('2d'), crop = $('crop'), cc = crop.getContext('2d');
+let boxStart = null;
+function dispPt(e) { const r = disp.getBoundingClientRect(); return [Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), Math.max(0, Math.min(1, (e.clientY - r.top) / r.height))]; }
+disp.addEventListener('pointerdown', e => {
+  const p = dispPt(e);
+  if (pickColor && last && last.dispImg) {
+    const im = last.dispImg, x = Math.floor(p[0] * im.width), y = Math.floor(p[1] * im.height), c = [0, 0, 0]; let n = 0;
+    for (let yy = -1; yy <= 1; yy++) for (let xx = -1; xx <= 1; xx++) { const X = Math.min(im.width - 1, Math.max(0, x + xx)), Y = Math.min(im.height - 1, Math.max(0, y + yy)), o = (Y * im.width + X) * 4; c[0] += im.data[o]; c[1] += im.data[o + 1]; c[2] += im.data[o + 2]; n++; }
+    C.color = c.map(v => Math.round(v / n)); pickColor = false; save();
+    $('readNote').textContent = `Digit colour set to rgb(${C.color.join(', ')}).`;
+    return;
+  }
+  boxStart = p; disp.setPointerCapture(e.pointerId); e.preventDefault();
+});
+disp.addEventListener('pointermove', e => {
+  if (!boxStart) return;
+  const p = dispPt(e);
+  const b = { x: Math.min(p[0], boxStart[0]), y: Math.min(p[1], boxStart[1]), w: Math.abs(p[0] - boxStart[0]), h: Math.abs(p[1] - boxStart[1]) };
+  if (b.w > .03 && b.h > .05) C.box = b;
+});
+disp.addEventListener('pointerup', () => { if (boxStart) { boxStart = null; save(); } });
+
+/* ---------- processing ---------- */
+function capture() {
+  const vw = video.videoWidth, vh = video.videoHeight;
+  if (!vw || !vh) return null;
+  if (work.width !== vw) { work.width = vw; work.height = vh; }
+  wc.drawImage(video, 0, 0, vw, vh);
+  return { vw, vh, frame: wc.getImageData(0, 0, vw, vh) };
+}
+function analyse(cap) {
+  if (!cap) return null;
+  const { vw, vh } = cap;
+  const Q = C.corners.map(([u, v]) => [u * vw, v * vh]);
+  const src = cap.frame, x0 = 0, y0 = 0;
+  const t = TYPES[C.type], M0 = SR.quadMap(Q);
+  let M = M0;
+  if (t.cols) {
+    // corners sit on the centres of the corner dots: stretch half a dot outward so the map covers whole dots
+    const ex = .5 / (t.cols - 1), ey = .5 / (t.rows - 1);
+    M = (u, v) => M0(-ex + u * (1 + 2 * ex), -ey + v * (1 + 2 * ey));
+  }
+  const DW = 384, DH = Math.round(DW / t.aspect);
+  const dispImg = SR.rectify(src, x0, y0, M, { x: 0, y: 0, w: 1, h: 1 }, DW, DH);
+  let scoreImg;
+  if (t.cols) {
+    const db = SR.dotBox(C.box, t.cols, t.rows), P = 4;
+    if (db.nx * db.ny > 12000) return { cap, dispImg };
+    scoreImg = SR.dotSample(SR.rectify(src, x0, y0, M, db.r, (db.nx + 1) * P, (db.ny + 1) * P), db.nx, db.ny, P);
+  } else {
+    const SH = 64, SW = Math.max(16, Math.min(900, Math.round(SH * (C.box.w * t.aspect) / C.box.h)));
+    scoreImg = SR.rectify(src, x0, y0, M, C.box, SW, SH);
+  }
+  return { cap, dispImg, scoreImg };
+}
+
+function opts() { return { mode: C.mode, color: C.color, tol: C.tol, blur: TYPES[C.type].cols ? 0 : C.blur, maxDist: STRICT[C.strict] }; }
+
+function drawDisp(img) {
+  if (disp.width !== img.width) { disp.width = img.width; disp.height = img.height; }
+  dc.putImageData(new ImageData(img.data, img.width, img.height), 0, 0);
+  const b = C.box; dc.strokeStyle = '#ff8a3d'; dc.lineWidth = 2; dc.strokeRect(b.x * img.width, b.y * img.height, b.w * img.width, b.h * img.height);
+}
+function drawCrop(rd) {
+  const s = Math.max(1, Math.floor(600 / rd.w)), W = rd.w * s, H = rd.h * s;
+  if (crop.width !== W || crop.height !== H) { crop.width = W; crop.height = H; }
+  const im = cc.createImageData(rd.w, rd.h);
+  for (let i = 0; i < rd.mask.length; i++) { const v = rd.mask[i] ? 236 : 12; im.data[i * 4] = v; im.data[i * 4 + 1] = v; im.data[i * 4 + 2] = rd.mask[i] ? 214 : 16; im.data[i * 4 + 3] = 255; }
+  const tmp = document.createElement('canvas'); tmp.width = rd.w; tmp.height = rd.h; tmp.getContext('2d').putImageData(im, 0, 0);
+  cc.imageSmoothingEnabled = false; cc.drawImage(tmp, 0, 0, W, H);
+  cc.lineWidth = 2; cc.font = `700 ${Math.max(14, Math.round(H * .28))}px "Barlow Semi Condensed", sans-serif`; cc.textBaseline = 'top';
+  for (const g of rd.glyphs) {
+    const b = g.box; cc.strokeStyle = g.ok ? '#6dffb0' : '#ff2a45';
+    cc.strokeRect(b.x0 * s, b.y0 * s, (b.x1 - b.x0 + 1) * s, (b.y1 - b.y0 + 1) * s);
+    if (g.d != null) { cc.fillStyle = g.ok ? '#6dffb0' : '#ff2a45'; cc.fillText(g.ok ? g.d : '?', b.x0 * s + 2, 2); }
+  }
+}
+
+const fmt = v => v == null ? '--' : Number(v).toLocaleString('en-US');
+function showScore() { $('score').textContent = fmt(tracker.value); }
+
+function renderChips() { $('chips').innerHTML = '0123456789'.split('').map(d => `<b class="${C.T[d] && C.T[d].length ? 'on' : ''}">${d}</b>`).join(''); }
+renderChips();
+
+function renderScenes() {
+  $('scenes').innerHTML = C.scenes.map((s, i) => `<div id="sc${i}"><span>${s.label.replace(/[&<>"]/g, '')}</span><i>--</i><button data-del="${i}">Remove</button></div>`).join('') || '<p class="muted">No screens captured yet.</p>';
+}
+renderScenes();
+$('scenes').onclick = e => { const i = e.target.dataset.del; if (i != null) { C.scenes.splice(+i, 1); save(); renderScenes(); } };
+
+let lastGood = 0;
+function tick() {
+  drawOverlay();
+  const g = analyse(frozen || capture());
+  if (!g) return;
+  last = g;
+  drawDisp(g.dispImg);
+  if (!g.scoreImg) return;
+  const rd = SR.read(g.scoreImg, opts(), C.T);
+  g.reading = rd;
+  drawCrop(rd);
+  const learned = Object.keys(C.T).length;
+  if (!frozen) {
+    if (tracker.push(rd)) { showScore(); sendScore(); }
+    if (rd.ok) lastGood = Date.now();
+    const fresh = Date.now() - lastGood < 4000;
+    $('score').classList.toggle('stale', !fresh);
+    if (!learned) pill($('readPill'), 'warn', 'Teach digits');
+    else pill($('readPill'), fresh ? 'ok' : 'warn', fresh ? 'Reading' : 'Searching');
+    $('readNote').textContent = rd.ok ? `Read ${fmt(Number(rd.text))} · confidence ${Math.round(rd.conf * 100)}%` : (rd.reason || '');
+    scenes(g.dispImg);
+  } else {
+    pill($('readPill'), 'warn', 'Frozen');
+    $('readNote').textContent = `Frozen. I see ${rd.glyphs.length} digit${rd.glyphs.length === 1 ? '' : 's'}${rd.ok ? ': ' + rd.text : ''}.`;
+  }
+}
+
+function scenes(img) {
+  if (!C.scenes.length) return;
+  const sig = SR.sceneSig(img), now = Date.now();
+  C.scenes.forEach((s, i) => {
+    const m = SR.sceneMatch(sig, s.sig), st = sceneState[i] || (sceneState[i] = { n: 0, at: 0 });
+    const row = $('sc' + i); if (row) { row.querySelector('i').textContent = Math.round(Math.max(0, m) * 100) + '%'; row.classList.toggle('hit', m >= .82); }
+    st.n = m >= .82 ? st.n + 1 : 0;
+    if (st.n === 2 && now - st.at > 15000) { st.at = now; link.send({ t: 'mode', label: s.label }); $('readNote').textContent = 'Sent to TV: ' + s.label; }
+  });
+}
+
+function setFrozen(on) {
+  frozen = on && last ? last.cap : null;
+  document.body.classList.toggle('frozen', !!frozen);
+  $('freeze').textContent = frozen ? 'Unfreeze' : 'Freeze';
+  if (frozen) $('typed').focus();
+}
+$('freeze').onclick = () => setFrozen(!frozen);
+$('learn').onclick = () => {
+  const g = last;
+  if (!g || !g.scoreImg) { $('learnMsg').textContent = 'No camera picture yet.'; return; }
+  const rd = SR.read(g.scoreImg, opts(), C.T);
+  const r = SR.learn(rd, $('typed').value, C.T);
+  $('learnMsg').textContent = r.msg;
+  if (r.ok) { save(); renderChips(); $('typed').value = ''; setFrozen(false); }
+};
+$('forget').onclick = () => { if (confirm('Forget every digit this phone has learned for this room?')) { C.T = {}; save(); renderChips(); tracker.reset(); showScore(); } };
+$('capture').onclick = () => {
+  const g = last, label = $('sceneName').value.trim().toUpperCase().slice(0, 28);
+  if (!label) { $('sceneName').focus(); return; }
+  if (!g) return;
+  C.scenes.push({ label, sig: SR.sceneSig(g.dispImg) }); save(); renderScenes();
+  $('sceneName').value = ''; setFrozen(false);
+};
+
+/* ---------- backup ---------- */
+$('dl').onclick = () => {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(C)], { type: 'application/json' }));
+  a.download = `scare-mode-score-setup-${SM.room}.json`; a.click();
+};
+$('ul').onclick = () => $('file').click();
+$('file').onchange = async () => {
+  const f = $('file').files[0]; if (!f) return;
+  try { C = Object.assign(defaults(), JSON.parse(await f.text())); save(); syncControls(); renderChips(); renderScenes(); $('learnMsg').textContent = 'Setup loaded.'; }
+  catch (e) { $('learnMsg').textContent = 'That file is not a score setup.'; }
+};
+
+setInterval(tick, 160);
+SM.keepAwake();
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && (!stream || stream.getVideoTracks().every(t => t.readyState === 'ended'))) startCam(); });
+(async () => {
+  const saved = localStorage.getItem('sm-score-cam') || '';
+  await listCams().catch(() => {});
+  if ([...$('camSel').options].some(o => o.value === saved)) $('camSel').value = saved;
+  startCam();
+})();
+</script>
+</body></html>

@@ -76,6 +76,10 @@ ol.board li.live{outline:2px solid var(--bone);background:rgba(236,228,214,.07)}
 .pip.landscape{width:400px;height:225px}
 .pip .nosig{font-size:15px;letter-spacing:.2em}
 .pip .osd{font-size:14px;top:8px;left:10px;background:rgba(0,0,0,.6);padding:2px 6px;border-radius:2px}
+.modecall{position:absolute;top:230px;left:50%;transform:translate(-50%,-10px);opacity:0;font-family:var(--font-num);font-weight:900;font-size:64px;letter-spacing:.08em;text-transform:uppercase;color:var(--void);background:var(--ecto);padding:4px 26px;border-radius:4px;box-shadow:0 0 40px rgba(109,255,176,.6);transition:opacity .8s,transform .8s;white-space:nowrap}
+.cam.moded .modecall{opacity:1;transform:translate(-50%,0);transition:none}
+.game .sc b{color:var(--ecto)}
+.log span u{text-decoration:none;color:var(--ecto);font-weight:700}
 .spike{position:absolute;top:130px;left:50%;transform:translate(-50%,-10px);opacity:0;font-family:var(--font-mark);font-size:76px;color:var(--blood);text-shadow:0 0 30px rgba(255,42,69,.8),0 3px 0 #000;transition:opacity .8s,transform .8s;white-space:nowrap}
 .cam.scared .spike{opacity:1;transform:translate(-50%,0);transition:none}
 .nameplate{position:absolute;left:0;right:0;bottom:0;padding:70px 40px 30px;background:linear-gradient(transparent,rgba(0,0,0,.92));display:flex;align-items:flex-end;justify-content:space-between;gap:24px}
@@ -170,9 +174,11 @@ footer .lab{font-family:var(--font-num);font-weight:900;font-size:28px;letter-sp
         <div class="osd">CAM 2 · PLAYFIELD</div>
       </div>
       <div class="spike" id="spike">+30 BPM!</div>
+      <div class="modecall" id="modecall">Multiball</div>
       <div class="nameplate">
         <div class="who"><span id="whoLabel">Up next</span><b id="whoName">Waiting for player</b></div>
         <div class="game">
+          <div class="sc" id="scoreWrap"><span>Score</span><b id="gameScore">--</b></div>
           <div><span>Game time</span><b id="gameTime">0:00</b></div>
           <div><span>Peak</span><b id="gamePeak">--</b></div>
         </div>
@@ -203,7 +209,7 @@ footer .lab{font-family:var(--font-num);font-weight:900;font-size:28px;letter-sp
     <div class="lab">Scare log</div>
     <div class="log" id="log"><span>Waiting for the first scare…</span></div>
     <div class="next" id="nextWrap">Up next<b id="upNext">--</b></div>
-    <div class="links" title="Face cam · Playfield cam · Armband · Control"><i id="lkFace"></i><i id="lkField"></i><i id="lkBand"></i><i id="lkCtl"></i></div>
+    <div class="links" title="Face cam · Playfield cam · Armband · Score cam · Control"><i id="lkFace"></i><i id="lkField"></i><i id="lkBand"></i><i id="lkScore"></i><i id="lkCtl"></i></div>
   </footer>
   <div id="roomtag"></div>
 </div>
@@ -266,21 +272,54 @@ function scare(amt, v) {
   save();
 }
 
+/* ================= score + mode events from the score cam ================= */
+// The score phone sends only numbers it has read off the backbox display.
+let liveScore = null, lastScore = 0;
+function onScore(v) {
+  v = Math.floor(Number(v)); if (!(v >= 0 && v < 1e13)) return;
+  liveScore = v; lastScore = Date.now();
+  if (S.current && v !== S.current.score) {
+    S.current.score = v;
+    if (!onScore.saveT || Date.now() - onScore.saveT > 3000) { onScore.saveT = Date.now(); save(); }
+  }
+}
+function onMode(label) {
+  label = String(label || '').trim().toUpperCase().slice(0, 28); if (!label) return;
+  const who = S.current ? S.current.ini || S.current.name : '---';
+  const el = S.current ? Math.floor((Date.now() - S.current.start) / 1000) : 0;
+  if (S.current) { const m = S.current.modes || (S.current.modes = {}); m[label] = (m[label] || 0) + 1; }
+  S.log.unshift({ ts: `${Math.floor(el / 60)}:${String(el % 60).padStart(2, '0')}`, who, mode: label });
+  S.log.length = Math.min(S.log.length, 10);
+  $('modecall').textContent = label;
+  const cam = $('cam'); cam.classList.remove('moded'); void cam.offsetWidth; cam.classList.add('moded');
+  clearTimeout(onMode.tm); onMode.tm = setTimeout(() => cam.classList.remove('moded'), 2600);
+  save();
+}
+function toScorePhones(msg) { for (const [c, i] of conns) if (i.role === 'score' && c.open) { try { c.send(msg); } catch (e) {} } }
+
 /* ================= commands from the control page ================= */
 function command(m) {
   switch (m.t) {
     case 'start':
-      S.current = { id: Date.now().toString(36), name: (m.name || '').trim().slice(0, 24), ini: (m.ini || '').trim().toUpperCase().slice(0, 4), start: Date.now(), peak: 0, low: 999, sum: 0, n: 0 };
+      S.current = { id: Date.now().toString(36), name: (m.name || '').trim().slice(0, 24), ini: (m.ini || '').trim().toUpperCase().slice(0, 4), start: Date.now(), peak: 0, low: 999, sum: 0, n: 0, score: null, modes: {} };
+      liveScore = null; toScorePhones({ t: 'reset' });
       if (m.upNext !== undefined) S.upNext = m.upNext;
       hist.length = 0; save(); break;
     case 'end':
       if (S.current && S.current.n > 0) {
         const c = S.current;
-        S.games.push({ id: c.id, name: c.name, ini: c.ini, peak: c.peak, low: c.low, avg: Math.round(c.sum / c.n), dur: Math.round((Date.now() - c.start) / 1000), at: Date.now() });
+        S.games.push({ id: c.id, name: c.name, ini: c.ini, peak: c.peak, low: c.low, avg: Math.round(c.sum / c.n), dur: Math.round((Date.now() - c.start) / 1000), at: Date.now(), score: c.score == null ? null : c.score, modes: c.modes || {} });
       }
       S.current = null; save(); break;
     case 'cancel': S.current = null; save(); break;
     case 'settings': ['event', 'eyebrow', 'machine', 'prizeHi', 'prizeLo', 'upNext'].forEach(k => { if (typeof m[k] === 'string') S[k] = m[k]; }); save(); break;
+    case 'setScore': {
+      const v = m.v === '' || m.v == null ? null : Math.floor(Number(m.v));
+      if (v !== null && !(v >= 0 && v < 1e13)) break;
+      if (m.id) { const g = S.games.find(g => g.id === m.id); if (g) g.score = v; }
+      else if (S.current) S.current.score = v;
+      save(); break;
+    }
     case 'delete': S.games = S.games.filter(g => g.id !== m.id); save(); break;
     case 'clear': S.games = []; S.log = []; S.current = null; save(); break;
     case 'restore': if (m.state && (m.state.updatedAt || 0) > (S.updatedAt || 0)) { S = Object.assign(defaults(), m.state); save(); } break;
@@ -293,7 +332,7 @@ function command(m) {
 let peer = null;
 const conns = new Map(); // conn -> {role, lastSeen}
 const calls = {};        // role -> MediaConnection
-const linkSeen = { face: 0, field: 0, control: 0 };
+const linkSeen = { face: 0, field: 0, control: 0, score: 0 };
 
 const netBanner = document.createElement('div');
 netBanner.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:99;padding:14px 20px;font:700 22px/1.3 system-ui,sans-serif;background:#b3001e;color:#fff;text-align:center;display:none';
@@ -323,6 +362,8 @@ function startPeer() {
       if (!m || !m.t) return;
       if (role === 'face' && m.t === 'hr') { onHr(m.bpm); try { conn.send({ t: 'gotHr', bpm: m.bpm, tv: TVCODE }); } catch (e) {} }
       else if (role === 'face' && m.t === 'band' && !m.ok) lastHr = 0;
+      else if (role === 'score' && m.t === 'score') onScore(m.v);
+      else if (role === 'score' && m.t === 'mode') onMode(m.label);
       else if ((role === 'face' || role === 'field') && m.t === 'zoom') {
         const z = Math.max(1, Math.min(4, Number(m.v) || 1));
         const v = role === 'face' ? $('faceVid') : $('fieldVid');
@@ -352,7 +393,8 @@ startPeer();
 
 function liveInfo() {
   const now = Date.now();
-  return { bpm: hrFresh() ? bpm : null, face: now - linkSeen.face < 7000 && !!calls.face, field: now - linkSeen.field < 7000 && !!calls.field, band: hrFresh() };
+  return { bpm: hrFresh() ? bpm : null, face: now - linkSeen.face < 7000 && !!calls.face, field: now - linkSeen.field < 7000 && !!calls.field, band: hrFresh(),
+    scoreCam: now - linkSeen.score < 7000, score: S.current && S.current.score != null ? S.current.score : null };
 }
 function broadcast() {
   const msg = { t: 'state', state: S, live: liveInfo() };
@@ -369,6 +411,7 @@ setInterval(() => {
 }, 2000);
 
 /* ================= rendering ================= */
+const fmtScore = v => v == null ? '' : v >= 1e9 ? (v / 1e9).toFixed(v >= 1e10 ? 1 : 2).replace(/\.?0+$/, '') + 'B' : v >= 1e6 ? (v / 1e6).toFixed(v >= 1e7 ? 1 : 2).replace(/\.?0+$/, '') + 'M' : v >= 1e3 ? Math.round(v / 1e3) + 'K' : String(v);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 function renderBoard(el, asc) {
   const all = S.games.map(g => ({ ...g }));
@@ -380,7 +423,8 @@ function renderBoard(el, asc) {
   el.innerHTML = rows.map(r => {
     const rk = all.indexOf(r) + 1;
     const tag = r.ini || r.name.slice(0, 3).toUpperCase();
-    const nm = r.ini && r.name ? `<em>${esc(r.name)}</em>` : '';
+    const extra = [r.ini && r.name ? esc(r.name) : '', r.score != null ? esc(fmtScore(r.score)) : ''].filter(Boolean).join(' · ');
+    const nm = extra ? `<em>${extra}</em>` : '';
     return `<li class="${r.live ? 'live' : ''}"><span class="rk">${rk}</span><span class="ini">${esc(tag)}${nm}${r.live ? '<span class="livetag">LIVE</span>' : ''}</span><span class="v">${r.peak}<small>bpm</small></span></li>`;
   }).join('');
 }
@@ -401,7 +445,7 @@ function renderAll() {
     $('whoName').textContent = S.upNext ? S.upNext : 'Waiting for player';
     $('histTitle').textContent = 'Heart rate';
   }
-  $('log').innerHTML = S.log.length ? S.log.map(e => `<span>${esc(e.ts)} · <b>${esc(e.who)}</b> · Spike <i>+${e.amt}</i> → ${e.bpm} bpm</span>`).join('') : '<span>Waiting for the first scare…</span>';
+  $('log').innerHTML = S.log.length ? S.log.map(e => e.mode ? `<span>${esc(e.ts)} · <b>${esc(e.who)}</b> · <u>${esc(e.mode)}</u></span>` : `<span>${esc(e.ts)} · <b>${esc(e.who)}</b> · Spike <i>+${e.amt}</i> → ${e.bpm} bpm</span>`).join('') : '<span>Waiting for the first scare…</span>';
 }
 renderAll();
 
@@ -497,6 +541,9 @@ function updateUi() {
     $('tc').textContent = c ? 'REC ' + [el / 3600, el % 3600 / 60, el % 60].map(v => String(Math.floor(v)).padStart(2, '0')).join(':') : 'STANDBY';
     $('clock').textContent = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     const L = liveInfo();
+    $('gameScore').textContent = L.score == null ? '--' : L.score.toLocaleString('en-US');
+    $('scoreWrap').style.display = L.scoreCam || L.score != null ? '' : 'none';
+    $('lkScore').classList.toggle('on', L.scoreCam);
     $('faceWrap').classList.toggle('live-ok', L.face); $('pip').classList.toggle('live-ok', L.field);
     $('lkFace').classList.toggle('on', L.face); $('lkField').classList.toggle('on', L.field); $('lkBand').classList.toggle('on', L.band);
     $('lkCtl').classList.toggle('on', Date.now() - linkSeen.control < 7000);
