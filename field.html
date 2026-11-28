@@ -41,7 +41,7 @@ function pill(el, cls, text) { el.className = 'pill ' + cls; el.querySelector('s
 const link = SM.client({
   role: 'field',
   getStream: () => stream,
-  onStatus: s => { pill($('tvPill'), s.startsWith('connected') ? 'ok' : 'warn', 'TV: ' + s); if (s === 'connected') sendOrient(); },
+  onStatus: s => { pill($('tvPill'), s.startsWith('connected') ? 'ok' : 'warn', 'TV: ' + s); if (s === 'connected') { sendOrient(); zoom && zoom.send(); } },
 });
 function sendOrient() { link.send({ t: 'orient', v: $('orient').value }); }
 $('orient').value = localStorage.getItem('sm-field-orient') || 'portrait';
@@ -69,8 +69,10 @@ async function startCam() {
     localStorage.setItem('sm-field-cam', id);
     listCams();
     link.restream();
+    zoom.apply();
   } catch (e) { alert('Camera failed: ' + e.message); }
 }
+const zoom = SM.zoomControl({ role: 'field', getStream: () => stream, link, preview: $('preview'), after: $('startCam').parentNode, mirror: false });
 $('startCam').onclick = startCam;
 $('camSel').onchange = startCam;
 

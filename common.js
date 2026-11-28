@@ -129,6 +129,44 @@ const SM = (() => {
     return { send, restream, isConnected: alive };
   }
 
+  /* Camera zoom: hardware zoom where the phone supports it (Chrome on Android),
+   * otherwise a digital zoom that the TV applies to that camera's picture.
+   * ?zoom=2 sets it from the link; a picker on the page changes it live. */
+  function zoomControl({ role, getStream, link, preview, after, mirror }) {
+    const key = 'sm-' + role + '-zoom';
+    let z = parseFloat(qs.get('zoom') || localStorage.getItem(key) || '1') || 1;
+    const sel = document.createElement('select');
+    sel.id = 'zoomSel';
+    [1, 1.5, 2, 2.5, 3].forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = 'Zoom ' + v + 'x'; sel.appendChild(o); });
+    if (![1, 1.5, 2, 2.5, 3].includes(z)) { const o = document.createElement('option'); o.value = z; o.textContent = 'Zoom ' + z + 'x'; sel.appendChild(o); }
+    sel.value = String(z);
+    const row = document.createElement('div'); row.className = 'row'; row.style.marginTop = '8px'; row.appendChild(sel);
+    after.parentNode.insertBefore(row, after.nextSibling);
+    // clip the preview so a digital zoom shows what the TV will show
+    const box = document.createElement('div');
+    box.style.cssText = 'overflow:hidden;border-radius:8px;background:#000';
+    preview.parentNode.insertBefore(box, preview); box.appendChild(preview);
+    let digital = 1;
+    async function apply() {
+      digital = z;
+      const stream = getStream && getStream();
+      const t = stream && stream.getVideoTracks()[0];
+      try {
+        const caps = t && t.getCapabilities ? t.getCapabilities() : {};
+        if (caps.zoom) {
+          const hw = Math.max(caps.zoom.min, Math.min(caps.zoom.max, z));
+          await t.applyConstraints({ advanced: [{ zoom: hw }] });
+          digital = Math.max(1, z / hw);
+        }
+      } catch (e) {}
+      preview.style.transform = `scale(${mirror ? -digital : digital}, ${digital})`;
+      send();
+    }
+    function send() { link.send({ t: 'zoom', v: digital }); }
+    sel.onchange = () => { z = parseFloat(sel.value) || 1; try { localStorage.setItem(key, String(z)); } catch (e) {} apply(); };
+    return { apply, send };
+  }
+
   /* Keep the phone screen on. */
   async function keepAwake() {
     let lock = null;
@@ -144,5 +182,5 @@ const SM = (() => {
     return `${page}?${p.toString()}`;
   }
 
-  return { room, tvId, peerOptions, client, keepAwake, link, qs, videoSize, preferH264, quality };
+  return { room, tvId, peerOptions, client, keepAwake, link, qs, zoomControl, videoSize, preferH264, quality };
 })();

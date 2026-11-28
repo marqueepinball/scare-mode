@@ -323,6 +323,12 @@ function startPeer() {
       if (!m || !m.t) return;
       if (role === 'face' && m.t === 'hr') { onHr(m.bpm); try { conn.send({ t: 'gotHr', bpm: m.bpm, tv: TVCODE }); } catch (e) {} }
       else if (role === 'face' && m.t === 'band' && !m.ok) lastHr = 0;
+      else if ((role === 'face' || role === 'field') && m.t === 'zoom') {
+        const z = Math.max(1, Math.min(4, Number(m.v) || 1));
+        const v = role === 'face' ? $('faceVid') : $('fieldVid');
+        const flip = role === 'face' && v.classList.contains('mirror');
+        v.style.transform = z === 1 ? '' : `scale(${flip ? -z : z}, ${z})`;
+      }
       else if (role === 'field' && m.t === 'orient') $('pip').classList.toggle('landscape', m.v === 'landscape');
       else if (role === 'control') command(m);
     });

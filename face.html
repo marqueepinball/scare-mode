@@ -53,7 +53,7 @@ function pill(el, cls, text) { el.className = 'pill ' + cls; el.querySelector('s
 const link = SM.client({
   role: 'face',
   getStream: () => stream,
-  onStatus: s => pill($('tvPill'), s.startsWith('connected') ? 'ok' : 'warn', 'TV: ' + s),
+  onStatus: s => { pill($('tvPill'), s.startsWith('connected') ? 'ok' : 'warn', 'TV: ' + s); if (s === 'connected' && zoom) zoom.send(); },
   onMessage: d => { if (d.t === 'gotHr') { tvGot = d.bpm; tvGotAt = Date.now(); hrDiag(); } },
 });
 
@@ -93,8 +93,10 @@ async function startCam() {
     localStorage.setItem('sm-face-cam', id);
     listCams();
     link.restream();
+    zoom.apply();
   } catch (e) { alert('Camera failed: ' + e.message); }
 }
+const zoom = SM.zoomControl({ role: 'face', getStream: () => stream, link, preview: $('preview'), after: $('startCam').parentNode, mirror: true });
 $('startCam').onclick = startCam;
 $('camSel').onchange = startCam;
 
