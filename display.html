@@ -298,20 +298,53 @@ const netBanner = document.createElement('div');
 netBanner.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:99;padding:14px 20px;font:700 22px/1.3 system-ui,sans-serif;background:#b3001e;color:#fff;text-align:center;display:none';
 document.body.appendChild(netBanner);
 function banner(t) { netBanner.textContent = t || ''; netBanner.style.display = t ? 'block' : 'none'; }
+// The newest TV page to load takes over the room: if the room is already held
+// (a forgotten tab, an OptiSigns editor preview), ask that screen to stand down.
+let takeoverTried = false, standingBy = false;
+function askTakeover() {
+  const tmp = new Peer(SM.peerOptions());
+  const done = () => { try { tmp.destroy(); } catch (e) {} };
+  tmp.on('open', () => {
+    const c = tmp.connect(SM.tvId, { reliable: true, metadata: { role: 'takeover' } });
+    c.on('open', () => { c.send({ t: 'yield' }); setTimeout(done, 800); });
+  });
+  tmp.on('error', done);
+  setTimeout(done, 6000);
+}
 function startPeer() {
   peer = new Peer(SM.tvId, SM.peerOptions());
-  peer.on('open', () => banner(''));
+  peer.on('open', () => { banner(''); standingBy = false; takeoverTried = true; });
   peer.on('error', err => {
     console.warn('peer', err.type);
-    if (err.type === 'unavailable-id') banner(`Another screen is already open as room "${SM.room}". Phones are talking to that one, not this TV. Close the other display page. Retrying...`);
+    let wait = 4000;
+    if (err.type === 'unavailable-id') {
+      if (!takeoverTried && !standingBy) {
+        takeoverTried = true; askTakeover(); wait = 3000;
+        banner(`Taking over room "${SM.room}" from another screen...`);
+      } else {
+        wait = standingBy ? 15000 : 4000;
+        banner(standingBy ? `Another screen took over room "${SM.room}". This screen is standing by.`
+                          : `Another screen is already open as room "${SM.room}". Phones are talking to that one, not this TV. Close the other display page. Retrying...`);
+      }
+    }
     if (err.type === 'unavailable-id' || err.type === 'network' || err.type === 'server-error' || err.type === 'socket-error') {
       try { peer.destroy(); } catch (e) {}
-      setTimeout(startPeer, 4000);
+      setTimeout(startPeer, wait);
     }
   });
   peer.on('disconnected', () => setTimeout(() => { if (!peer.destroyed) peer.reconnect(); }, 2000));
   peer.on('connection', conn => {
     const role = (conn.metadata && conn.metadata.role) || 'unknown';
+    if (role === 'takeover') {
+      conn.on('data', m => {
+        if (!m || m.t !== 'yield') return;
+        standingBy = true;
+        banner(`Another screen took over room "${SM.room}". This screen is standing by.`);
+        try { peer.destroy(); } catch (e) {}
+        setTimeout(startPeer, 15000);
+      });
+      return;
+    }
     conn.on('open', () => {
       conns.set(conn, { role, lastSeen: Date.now() });
       if (role === 'control') conn.send({ t: 'state', state: S, live: liveInfo() });
