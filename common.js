@@ -102,16 +102,39 @@ const SM = (() => {
       conn.on('open', () => {
         connecting = false; lastSeen = Date.now(); status('connected');
         send({ t: 'hello', role });
-        const stream = getStream && getStream();
-        if (stream) { call = peer.call(tvId, stream, { metadata: { role }, sdpTransform: preferH264 }); capSender(call); }
+        sendVideo();
       });
       conn.on('data', d => {
         lastSeen = Date.now();
+        if (d && d.t === 'sdp') { onSdp(d.d); return; }
         if (d && d.tv && d.tv !== tvCode) { tvCode = d.tv; status('connected (TV code ' + tvCode + ')'); }
         if (d && d.t !== 'ping' && onMessage) onMessage(d);
       });
       conn.on('close', () => { tvCode = ''; status('searching'); });
       conn.on('error', () => {});
+    }
+
+    /* Video rides on the same connection as the data link (one connection per
+     * camera instead of two), so TVs that limit connections can take both cams.
+     * The offer/answer for the added video goes over the data link itself. */
+    async function sendVideo() {
+      const stream = getStream && getStream();
+      const track = stream && stream.getVideoTracks()[0];
+      const c = conn, pc = c && c.peerConnection;
+      if (!track || !pc || !c.open) return;
+      try {
+        const snd = pc.getSenders().find(x => x.track && x.track.kind === 'video');
+        if (snd) { await snd.replaceTrack(track); return; }
+        pc.addTrack(track, stream);
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription({ type: offer.type, sdp: preferH264(offer.sdp) });
+        if (c === conn) send({ t: 'sdp', d: { type: pc.localDescription.type, sdp: pc.localDescription.sdp } });
+      } catch (e) { console.warn('video offer failed', e); }
+    }
+    async function onSdp(d) {
+      const pc = conn && conn.peerConnection;
+      if (!pc || !d || d.type !== 'answer') return;
+      try { await pc.setRemoteDescription(d); capSender({ peerConnection: pc }); } catch (e) { console.warn('video answer failed', e); }
     }
 
     function teardown() {
@@ -123,7 +146,7 @@ const SM = (() => {
     function send(msg) { if (conn && conn.open) { try { conn.send(msg); } catch (e) {} } }
 
     // Re-send the camera (e.g. after switching cameras)
-    function restream() { teardown(); connecting = false; tick(); }
+    function restream() { if (alive()) { sendVideo(); return; } teardown(); connecting = false; tick(); }
 
     start();
     return { send, restream, isConnected: alive };

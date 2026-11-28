@@ -315,12 +315,14 @@ function startPeer() {
     const role = (conn.metadata && conn.metadata.role) || 'unknown';
     conn.on('open', () => {
       conns.set(conn, { role, lastSeen: Date.now() });
+      if (role === 'face' || role === 'field') inbandVideo(conn, role);
       if (role === 'control') conn.send({ t: 'state', state: S, live: liveInfo() });
     });
     conn.on('data', m => {
       const info = conns.get(conn); if (info) info.lastSeen = Date.now();
       linkSeen[role] = Date.now();
       if (!m || !m.t) return;
+      if (m.t === 'sdp' && (role === 'face' || role === 'field')) { answerVideo(conn, m.d); return; }
       if (role === 'face' && m.t === 'hr') { onHr(m.bpm); try { conn.send({ t: 'gotHr', bpm: m.bpm, tv: TVCODE }); } catch (e) {} }
       else if (role === 'face' && m.t === 'band' && !m.ok) lastHr = 0;
       else if ((role === 'face' || role === 'field') && m.t === 'zoom') {
@@ -332,7 +334,7 @@ function startPeer() {
       else if (role === 'field' && m.t === 'orient') $('pip').classList.toggle('landscape', m.v === 'landscape');
       else if (role === 'control') command(m);
     });
-    conn.on('close', () => conns.delete(conn));
+    conn.on('close', () => { conns.delete(conn); if (calls[role] && calls[role].conn === conn) calls[role].close(); });
     conn.on('error', () => conns.delete(conn));
   });
   peer.on('call', call => {
@@ -347,6 +349,28 @@ function startPeer() {
     });
     call.on('close', () => { if (calls[role] === call) { delete calls[role]; (role === 'face' ? $('faceVid') : $('fieldVid')).srcObject = null; } });
   });
+}
+// Camera video arriving on the phone's data connection (one connection per camera)
+function inbandVideo(conn, role) {
+  const pc = conn.peerConnection; if (!pc) return;
+  pc.addEventListener('track', e => {
+    if (e.track.kind !== 'video') return;
+    if (calls[role] && calls[role].conn !== conn) { try { calls[role].close(); } catch (x) {} }
+    const v = role === 'face' ? $('faceVid') : $('fieldVid');
+    const entry = { conn, close() { if (calls[role] === entry) { delete calls[role]; v.srcObject = null; } } };
+    calls[role] = entry;
+    v.srcObject = e.streams && e.streams[0] ? e.streams[0] : new MediaStream([e.track]);
+    v.muted = true; v.play().catch(() => {});
+  });
+}
+async function answerVideo(conn, d) {
+  const pc = conn.peerConnection; if (!pc || !d || d.type !== 'offer') return;
+  try {
+    await pc.setRemoteDescription(d);
+    const ans = await pc.createAnswer();
+    await pc.setLocalDescription({ type: ans.type, sdp: SM.preferH264(ans.sdp) });
+    conn.send({ t: 'sdp', d: { type: pc.localDescription.type, sdp: pc.localDescription.sdp } });
+  } catch (e) { console.warn('video answer failed', e); }
 }
 startPeer();
 
