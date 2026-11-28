@@ -54,7 +54,9 @@ ol.board li.live{outline:2px solid var(--bone);background:rgba(236,228,214,.07)}
 .prize b{color:var(--bone);font-weight:600}
 .cam{position:relative;border-radius:6px;overflow:hidden;background:#000;border:1px solid var(--line)}
 .cam video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;background:#000}
-#faceVid.mirror{transform:scaleX(-1)}
+#faceVid.mirror,#faceImg.mirror{transform:scaleX(-1)}
+.cam img.snap{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;background:#000}
+.snapping img.snap{display:block}
 .nosig{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;font-family:var(--font-mono);color:rgba(236,228,214,.55);letter-spacing:.3em;font-size:26px;
   background:repeating-linear-gradient(0deg,rgba(255,255,255,.025) 0 2px,transparent 2px 5px),#050507}
 .nosig small{font-size:16px;letter-spacing:.15em;color:var(--ash)}
@@ -157,6 +159,7 @@ footer .lab{font-family:var(--font-num);font-weight:900;font-size:28px;letter-sp
     <section class="cam idle" id="cam">
       <div id="faceWrap" style="position:absolute;inset:0">
         <video id="faceVid" class="mirror" autoplay muted playsinline></video>
+        <img id="faceImg" class="snap mirror" alt="">
         <div class="nosig">NO SIGNAL<small>Open the Face Cam page on the backbox phone</small></div>
       </div>
       <div class="scan"></div><div class="vig"></div><div class="flash"></div>
@@ -165,6 +168,7 @@ footer .lab{font-family:var(--font-num);font-weight:900;font-size:28px;letter-sp
       <div class="osd tr"><i class="rec"></i><span id="tc">STANDBY</span></div>
       <div class="pip" id="pip">
         <video id="fieldVid" autoplay muted playsinline></video>
+        <img id="fieldImg" class="snap" alt="">
         <div class="nosig">NO SIGNAL</div>
         <div class="osd">CAM 2 · PLAYFIELD</div>
       </div>
@@ -216,7 +220,7 @@ const stage = $('stage');
 function fit() { const s = Math.min(innerWidth / 1920, innerHeight / 1080); stage.style.transform = `translate(-50%,-50%) scale(${s})`; }
 addEventListener('resize', fit); fit();
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-if (SM.qs.get('mirror') === '0') $('faceVid').classList.remove('mirror');
+if (SM.qs.get('mirror') === '0') { $('faceVid').classList.remove('mirror'); $('faceImg').classList.remove('mirror'); }
 $('roomtag').textContent = 'ROOM ' + SM.room.toUpperCase();
 
 /* ================= state (persisted on this screen) ================= */
@@ -289,11 +293,34 @@ let peer = null;
 const conns = new Map(); // conn -> {role, lastSeen}
 const calls = {};        // role -> MediaConnection
 const linkSeen = { face: 0, field: 0, control: 0 };
+const frameSeen = { face: 0, field: 0 };
+const vidTrack = { face: { t: -1, at: 0 }, field: { t: -1, at: 0 } };
+const vidEl = r => r === 'face' ? $('faceVid') : $('fieldVid');
+// true while the live video for this role is actually showing moving pictures
+function videoLive(r) {
+  const v = vidEl(r);
+  return !!(calls[r] && v.srcObject && v.videoWidth > 0 && Date.now() - vidTrack[r].at < 4000);
+}
+function showFrame(role, buf) {
+  const img = role === 'face' ? $('faceImg') : $('fieldImg');
+  const url = URL.createObjectURL(new Blob([buf], { type: 'image/jpeg' }));
+  const old = img.dataset.url;
+  img.onload = () => { if (old) URL.revokeObjectURL(old); };
+  img.dataset.url = url; img.src = url;
+  frameSeen[role] = Date.now();
+}
 
+const netBanner = document.createElement('div');
+netBanner.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:99;padding:14px 20px;font:700 22px/1.3 system-ui,sans-serif;background:#b3001e;color:#fff;text-align:center;display:none';
+document.body.appendChild(netBanner);
+function banner(t) { netBanner.textContent = t || ''; netBanner.style.display = t ? 'block' : 'none'; }
 function startPeer() {
   peer = new Peer(SM.tvId, SM.peerOptions());
+  peer.on('open', () => banner(''));
   peer.on('error', err => {
     console.warn('peer', err.type);
+    if (err.type === 'unavailable-id') banner(`Another screen is already open as room "${SM.room}". Close the other display page (any browser, laptop or TV), phones are talking to it, not this one. Retrying...`);
+    else if (err.type === 'network' || err.type === 'server-error' || err.type === 'socket-error') banner('TV is offline from the connection server. Retrying...');
     if (err.type === 'unavailable-id' || err.type === 'network' || err.type === 'server-error' || err.type === 'socket-error') {
       try { peer.destroy(); } catch (e) {}
       setTimeout(startPeer, 4000);
@@ -310,6 +337,7 @@ function startPeer() {
       const info = conns.get(conn); if (info) info.lastSeen = Date.now();
       linkSeen[role] = Date.now();
       if (!m || !m.t) return;
+      if ((role === 'face' || role === 'field') && m.t === 'frame') { try { showFrame(role, m.b); } catch (e) {} try { conn.send({ t: 'fack' }); } catch (e) {} return; }
       if (role === 'face' && m.t === 'hr') onHr(m.bpm);
       else if (role === 'face' && m.t === 'band' && !m.ok) lastHr = 0;
       else if (role === 'field' && m.t === 'orient') $('pip').classList.toggle('landscape', m.v === 'landscape');
@@ -328,6 +356,7 @@ function startPeer() {
       const v = role === 'face' ? $('faceVid') : $('fieldVid');
       v.srcObject = s; v.muted = true; v.play().catch(() => {});
     });
+    call.on('error', e => console.warn('call', role, e && e.type));
     call.on('close', () => { if (calls[role] === call) { delete calls[role]; (role === 'face' ? $('faceVid') : $('fieldVid')).srcObject = null; } });
   });
 }
@@ -335,7 +364,8 @@ startPeer();
 
 function liveInfo() {
   const now = Date.now();
-  return { bpm: hrFresh() ? bpm : null, face: now - linkSeen.face < 7000 && !!calls.face, field: now - linkSeen.field < 7000 && !!calls.field, band: hrFresh() };
+  const ok = r => now - linkSeen[r] < 7000 && (videoLive(r) || now - frameSeen[r] < 3000);
+  return { bpm: hrFresh() ? bpm : null, face: ok('face'), field: ok('field'), band: hrFresh() };
 }
 function broadcast() {
   const msg = { t: 'state', state: S, live: liveInfo() };
@@ -345,10 +375,18 @@ setInterval(() => {
   const now = Date.now();
   for (const [c, i] of conns) {
     if (now - i.lastSeen > 8000) { try { c.close(); } catch (e) {} conns.delete(c); continue; }
-    if (c.open) { try { c.send(i.role === 'control' ? { t: 'live', live: liveInfo() } : { t: 'ping' }); } catch (e) {} }
+    if (c.open) { try { c.send(i.role === 'control' ? { t: 'live', live: liveInfo() } : (i.role === 'face' || i.role === 'field') ? { t: 'vstat', ok: videoLive(i.role) } : { t: 'ping' }); } catch (e) {} }
   }
   // drop a video whose phone has gone quiet
   ['face', 'field'].forEach(r => { if (calls[r] && now - linkSeen[r] > 10000) { try { calls[r].close(); } catch (e) {} } });
+  // track whether live video is moving; show snapshots only when it is not
+  ['face', 'field'].forEach(r => {
+    const v = vidEl(r);
+    if (v.srcObject && v.currentTime !== vidTrack[r].t) { vidTrack[r].t = v.currentTime; vidTrack[r].at = now; }
+    if (v.srcObject && v.paused) v.play().catch(() => {});
+    const wrap = r === 'face' ? $('faceWrap') : $('pip');
+    wrap.classList.toggle('snapping', !videoLive(r) && now - frameSeen[r] < 3000);
+  });
 }, 2000);
 
 /* ================= rendering ================= */

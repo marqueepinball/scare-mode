@@ -12,6 +12,7 @@
   <div class="row" style="margin-bottom:10px">
     <span class="pill" id="tvPill"><i class="dot"></i><span>TV: starting</span></span>
     <span class="pill" id="bandPill"><i class="dot"></i><span>Band: not connected</span></span>
+    <div id="vidStat" style="width:100%;font-size:13px;opacity:.8;margin-top:6px">Video: waiting for TV</div>
   </div>
   <div class="row" style="align-items:flex-end">
     <div class="big" id="bpm">--</div><div class="muted" style="flex:0 0 auto">BPM</div>
@@ -49,6 +50,7 @@ const link = SM.client({
   role: 'face',
   getStream: () => stream,
   onStatus: s => pill($('tvPill'), s === 'connected' ? 'ok' : 'warn', 'TV: ' + s),
+  onVideo: s => { $('vidStat').textContent = s; },
 });
 
 function sendHr(v) {

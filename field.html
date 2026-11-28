@@ -10,6 +10,7 @@
 
 <div class="card">
   <span class="pill" id="tvPill"><i class="dot"></i><span>TV: starting</span></span>
+  <div id="vidStat" style="width:100%;font-size:13px;opacity:.8;margin-top:6px">Video: waiting for TV</div>
 </div>
 
 <div class="card">
@@ -38,6 +39,7 @@ const link = SM.client({
   role: 'field',
   getStream: () => stream,
   onStatus: s => { pill($('tvPill'), s === 'connected' ? 'ok' : 'warn', 'TV: ' + s); if (s === 'connected') sendOrient(); },
+  onVideo: s => { $('vidStat').textContent = s; },
 });
 function sendOrient() { link.send({ t: 'orient', v: $('orient').value }); }
 $('orient').value = localStorage.getItem('sm-field-orient') || 'portrait';

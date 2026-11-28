@@ -13,6 +13,16 @@ const SM = (() => {
   // Optional self-hosted signaling server: ?server=host:port[:path][:secure]
   function peerOptions() {
     const o = { debug: 1 };
+    // Optional extra TURN relay: ?turn=turn:host:port|username|password
+    const t = qs.get('turn');
+    if (t) {
+      const [urls, username, credential] = t.split('|');
+      o.config = { iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: ['turn:eu-0.turn.peerjs.com:3478', 'turn:us-0.turn.peerjs.com:3478'], username: 'peerjs', credential: 'peerjsp' },
+        { urls, username, credential },
+      ] };
+    }
     const s = qs.get('server');
     if (s) {
       const [host, port, path, secure] = s.split(':');
@@ -26,9 +36,14 @@ const SM = (() => {
 
   /* A phone/control "client": keeps a data link (and optional media call)
    * to the TV alive, reconnecting forever. */
-  function client({ role, getStream, onMessage, onStatus }) {
+  function client({ role, getStream, onMessage, onStatus, onVideo }) {
     let peer = null, conn = null, call = null, lastSeen = 0, timer = null, connecting = false;
     const status = s => onStatus && onStatus(s);
+    const video = s => onVideo && onVideo(s);
+    // Snapshot fallback: if live video never reaches the TV (venue Wi-Fi often
+    // blocks it), send JPEG frames over the data link, which does get through.
+    let callAt = 0, frameMode = false, fps = 0, frames = 0, fpsAt = Date.now(), waitAck = false, ackAt = 0;
+    let grabVid = null, grabCv = null;
 
     function start() {
       peer = new Peer(`scaremode-${room}-${role}-${rid()}`, peerOptions());
@@ -54,12 +69,79 @@ const SM = (() => {
       conn.on('open', () => {
         connecting = false; lastSeen = Date.now(); status('connected');
         send({ t: 'hello', role });
-        const stream = getStream && getStream();
-        if (stream) call = peer.call(tvId, stream, { metadata: { role } });
+        placeCall();
       });
-      conn.on('data', d => { lastSeen = Date.now(); if (d && d.t !== 'ping' && onMessage) onMessage(d); });
+      conn.on('data', d => {
+        lastSeen = Date.now();
+        if (!d || d.t === 'ping') return;
+        if (d.t === 'fack') { waitAck = false; return; }
+        if (d.t === 'vstat') { onVstat(d.ok); return; }
+        if (onMessage) onMessage(d);
+      });
       conn.on('close', () => { status('searching'); });
       conn.on('error', () => {});
+    }
+
+    function placeCall() {
+      try { call && call.close(); } catch (e) {}
+      call = null; callAt = Date.now();
+      const stream = getStream && getStream();
+      if (stream && peer && peer.open) call = peer.call(tvId, stream, { metadata: { role } });
+    }
+
+    async function pathType(pc) {
+      try {
+        const st = await pc.getStats(); let pair = null; const c = {};
+        st.forEach(r => { if (r.type === 'candidate-pair' && (r.nominated || r.selected) && r.state === 'succeeded') pair = r; if (r.type === 'local-candidate') c[r.id] = r; });
+        if (!pair) return 'none';
+        const l = c[pair.localCandidateId]; return l ? (l.candidateType === 'relay' ? 'relay' : l.candidateType === 'host' ? 'direct' : 'via internet') : '?';
+      } catch (e) { return '?'; }
+    }
+
+    async function onVstat(ok) {
+      const stream = getStream && getStream();
+      if (!stream) { frameMode = false; video('Video: no camera yet'); return; }
+      const ice = call && call.peerConnection ? call.peerConnection.iceConnectionState : 'no call';
+      if (ok) { frameMode = false; video('Video: LIVE on TV (' + ice + ')'); return; }
+      const age = Date.now() - callAt;
+      if (age > 5000 && !frameMode) { frameMode = true; pump(); }
+      if (age > 25000) placeCall(); // keep retrying the live call in the background
+      const dataPath = conn && conn.peerConnection ? await pathType(conn.peerConnection) : '?';
+      video(frameMode ? `Video: SNAPSHOTS ${fps} fps (live call ${ice}, link ${dataPath})` : `Video: starting (call ${ice})`);
+    }
+
+    function pump() {
+      if (!frameMode) return;
+      const stream = getStream && getStream();
+      if (!stream || !conn || !conn.open) { setTimeout(pump, 500); return; }
+      if (waitAck && Date.now() - ackAt < 2000) { setTimeout(pump, 40); return; }
+      if (!grabVid) {
+        grabVid = document.createElement('video');
+        grabVid.muted = true; grabVid.playsInline = true; grabVid.setAttribute('playsinline', '');
+        grabVid.style.cssText = 'position:fixed;left:0;bottom:0;width:2px;height:2px;opacity:0.01;pointer-events:none';
+        document.body.appendChild(grabVid);
+        grabCv = document.createElement('canvas');
+      }
+      if (grabVid.srcObject !== stream) grabVid.srcObject = stream;
+      if (grabVid.paused) grabVid.play().catch(() => {});
+      const vw = grabVid.videoWidth, vh = grabVid.videoHeight;
+      if (!vw) { setTimeout(pump, 200); return; }
+      const w = 480, h = Math.round(w * vh / vw);
+      grabCv.width = w; grabCv.height = h;
+      grabCv.getContext('2d').drawImage(grabVid, 0, 0, w, h);
+      const t0 = Date.now();
+      grabCv.toBlob(async b => {
+        try {
+          if (b && conn && conn.open) {
+            const buf = await b.arrayBuffer();
+            waitAck = true; ackAt = Date.now();
+            conn.send({ t: 'frame', b: buf });
+            frames++;
+            if (Date.now() - fpsAt > 2000) { fps = Math.round(frames * 1000 / (Date.now() - fpsAt)); frames = 0; fpsAt = Date.now(); }
+          }
+        } catch (e) {}
+        setTimeout(pump, Math.max(0, 90 - (Date.now() - t0)));
+      }, 'image/jpeg', 0.6);
     }
 
     function teardown() {
@@ -71,7 +153,7 @@ const SM = (() => {
     function send(msg) { if (conn && conn.open) { try { conn.send(msg); } catch (e) {} } }
 
     // Re-send the camera (e.g. after switching cameras)
-    function restream() { teardown(); connecting = false; tick(); }
+    function restream() { teardown(); waitAck = false; connecting = false; tick(); }
 
     start();
     return { send, restream, isConnected: alive };
