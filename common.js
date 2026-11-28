@@ -22,6 +22,54 @@ const SM = (() => {
   }
 
   const tvId = `scaremode-${room}-tv`;
+
+  /* Video quality for phone cameras: ?q=low (default) | med | high */
+  const Q = { low: [480, 360, 15, 350], med: [640, 480, 24, 700], high: [1280, 720, 30, 1500] };
+  const quality = Q[qs.get('q')] ? qs.get('q') : 'low';
+  const [qW, qH, qFps, qKbps] = Q[quality];
+  function videoSize() { return { width: { ideal: qW }, height: { ideal: qH }, frameRate: { ideal: qFps, max: qFps } }; }
+
+  /* Prefer H.264 so TV boxes can decode in hardware (VP8 is decoded in software). */
+  function preferH264(sdp) {
+    try {
+      const L = sdp.split('\r\n');
+      const mi = L.findIndex(l => l.startsWith('m=video'));
+      if (mi < 0) return sdp;
+      let end = L.findIndex((l, i) => i > mi && l.startsWith('m='));
+      if (end < 0) end = L.length;
+      const sec = L.slice(mi, end);
+      const h264 = sec.filter(l => /^a=rtpmap:\d+ H264\//i.test(l)).map(l => l.match(/^a=rtpmap:(\d+)/)[1]);
+      if (!h264.length) return sdp;
+      // keep each H.264 payload's RTX partner right behind it
+      const rtx = sec.filter(l => /^a=fmtp:\d+ apt=\d+/.test(l)).map(l => l.match(/^a=fmtp:(\d+) apt=(\d+)/));
+      const first = [];
+      h264.forEach(pt => { first.push(pt); rtx.filter(m => m[2] === pt).forEach(m => first.push(m[1])); });
+      const parts = L[mi].split(' ');
+      const pts = parts.slice(3);
+      L[mi] = [...parts.slice(0, 3), ...first.filter(p => pts.includes(p)), ...pts.filter(p => !first.includes(p))].join(' ');
+      return L.join('\r\n');
+    } catch (e) { return sdp; }
+  }
+
+  /* Cap the camera's send bitrate/framerate once the call is up. */
+  function capSender(call) {
+    let tries = 0;
+    const t = setInterval(() => {
+      tries++;
+      const pc = call && call.peerConnection;
+      const snd = pc && pc.getSenders && pc.getSenders().find(x => x.track && x.track.kind === 'video');
+      if (snd) {
+        clearInterval(t);
+        try {
+          const p = snd.getParameters();
+          if (!p.encodings || !p.encodings.length) p.encodings = [{}];
+          p.encodings[0].maxBitrate = qKbps * 1000;
+          p.encodings[0].maxFramerate = qFps;
+          snd.setParameters(p).catch(() => {});
+        } catch (e) {}
+      } else if (tries > 20) clearInterval(t);
+    }, 500);
+  }
   const rid = () => Math.random().toString(36).slice(2, 8);
 
   /* A phone/control "client": keeps a data link (and optional media call)
@@ -55,7 +103,7 @@ const SM = (() => {
         connecting = false; lastSeen = Date.now(); status('connected');
         send({ t: 'hello', role });
         const stream = getStream && getStream();
-        if (stream) call = peer.call(tvId, stream, { metadata: { role } });
+        if (stream) { call = peer.call(tvId, stream, { metadata: { role }, sdpTransform: preferH264 }); capSender(call); }
       });
       conn.on('data', d => {
         lastSeen = Date.now();
@@ -96,5 +144,5 @@ const SM = (() => {
     return `${page}?${p.toString()}`;
   }
 
-  return { room, tvId, peerOptions, client, keepAwake, link, qs };
+  return { room, tvId, peerOptions, client, keepAwake, link, qs, videoSize, preferH264, quality };
 })();
