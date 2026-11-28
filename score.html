@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="en"><head>
+<link rel="icon" href="favicon.ico" sizes="any"><link rel="icon" type="image/png" href="icon-192.png"><link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Scare Mode · Score Cam</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Creepster&family=Big+Shoulders+Display:wght@900&family=Barlow+Semi+Condensed:wght@400;600;700&display=swap">
@@ -45,6 +46,9 @@ input[type=range]{padding:0;min-height:36px}
   <div class="row" style="margin-top:10px">
     <select id="camSel"></select>
     <button id="startCam">Start camera</button>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <button id="reloadPage" onclick="location.reload()">Refresh page</button>
   </div>
   <label for="dtype">Display type</label>
   <select id="dtype">
@@ -134,7 +138,7 @@ function pill(el, cls, text) { el.className = 'pill ' + cls; el.querySelector('s
 /* ---------- link to the TV (data only, no video) ---------- */
 const link = SM.client({
   role: 'score',
-  onStatus: s => { pill($('tvPill'), s === 'connected' ? 'ok' : 'warn', 'TV: ' + s); if (s === 'connected') sendScore(); },
+  onStatus: s => { const on = s.startsWith('connected'); pill($('tvPill'), on ? 'ok' : 'warn', 'TV: ' + s); if (on) sendScore(); },
   onMessage: m => { if (m.t === 'reset') { tracker.reset(); showScore(); } },
 });
 function sendScore() { if (tracker.value !== null) link.send({ t: 'score', v: tracker.value }); }

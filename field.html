@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="en"><head>
+<link rel="icon" href="favicon.ico" sizes="any"><link rel="icon" type="image/png" href="icon-192.png"><link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Scare Mode · Playfield Cam</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Creepster&family=Barlow+Semi+Condensed:wght@400;600;700&display=swap">
@@ -19,6 +20,9 @@
     <select id="camSel"></select>
     <button id="startCam">Start camera</button>
   </div>
+  <div class="row" style="margin-top:8px">
+    <button id="reloadPage" onclick="location.reload()">Refresh page</button>
+  </div>
   <label for="orient">Shape sent to TV</label>
   <select id="orient">
     <option value="portrait">Portrait (phone upright)</option>
@@ -37,7 +41,7 @@ function pill(el, cls, text) { el.className = 'pill ' + cls; el.querySelector('s
 const link = SM.client({
   role: 'field',
   getStream: () => stream,
-  onStatus: s => { pill($('tvPill'), s === 'connected' ? 'ok' : 'warn', 'TV: ' + s); if (s === 'connected') sendOrient(); },
+  onStatus: s => { pill($('tvPill'), s.startsWith('connected') ? 'ok' : 'warn', 'TV: ' + s); if (s === 'connected') { sendOrient(); zoom && zoom.send(); } },
 });
 function sendOrient() { link.send({ t: 'orient', v: $('orient').value }); }
 $('orient').value = localStorage.getItem('sm-field-orient') || 'portrait';
@@ -54,7 +58,7 @@ async function startCam() {
   try {
     if (stream) stream.getTracks().forEach(t => t.stop());
     const id = $('camSel').value;
-    const size = { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } };
+    const size = SM.videoSize();
     stream = await navigator.mediaDevices.getUserMedia({
       audio: false,
       video: id ? { deviceId: { exact: id }, ...size } : { facingMode: { ideal: 'environment' }, ...size }
@@ -65,8 +69,10 @@ async function startCam() {
     localStorage.setItem('sm-field-cam', id);
     listCams();
     link.restream();
+    zoom.apply();
   } catch (e) { alert('Camera failed: ' + e.message); }
 }
+const zoom = SM.zoomControl({ role: 'field', getStream: () => stream, link, preview: $('preview'), after: $('startCam').parentNode, mirror: false });
 $('startCam').onclick = startCam;
 $('camSel').onchange = startCam;
 
