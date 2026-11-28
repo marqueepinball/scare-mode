@@ -320,7 +320,7 @@ function startPeer() {
       const info = conns.get(conn); if (info) info.lastSeen = Date.now();
       linkSeen[role] = Date.now();
       if (!m || !m.t) return;
-      if (role === 'face' && m.t === 'hr') onHr(m.bpm);
+      if (role === 'face' && m.t === 'hr') { onHr(m.bpm); try { conn.send({ t: 'gotHr', bpm: m.bpm, tv: TVCODE }); } catch (e) {} }
       else if (role === 'face' && m.t === 'band' && !m.ok) lastHr = 0;
       else if (role === 'field' && m.t === 'orient') $('pip').classList.toggle('landscape', m.v === 'landscape');
       else if (role === 'control') command(m);
