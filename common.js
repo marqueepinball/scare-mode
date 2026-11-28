@@ -27,7 +27,7 @@ const SM = (() => {
   /* A phone/control "client": keeps a data link (and optional media call)
    * to the TV alive, reconnecting forever. */
   function client({ role, getStream, onMessage, onStatus }) {
-    let peer = null, conn = null, call = null, lastSeen = 0, timer = null, connecting = false;
+    let peer = null, conn = null, call = null, lastSeen = 0, timer = null, connecting = false, tvCode = '';
     const status = s => onStatus && onStatus(s);
 
     function start() {
@@ -57,8 +57,12 @@ const SM = (() => {
         const stream = getStream && getStream();
         if (stream) call = peer.call(tvId, stream, { metadata: { role } });
       });
-      conn.on('data', d => { lastSeen = Date.now(); if (d && d.t !== 'ping' && onMessage) onMessage(d); });
-      conn.on('close', () => { status('searching'); });
+      conn.on('data', d => {
+        lastSeen = Date.now();
+        if (d && d.tv && d.tv !== tvCode) { tvCode = d.tv; status('connected (TV code ' + tvCode + ')'); }
+        if (d && d.t !== 'ping' && onMessage) onMessage(d);
+      });
+      conn.on('close', () => { tvCode = ''; status('searching'); });
       conn.on('error', () => {});
     }
 

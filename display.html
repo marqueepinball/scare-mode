@@ -120,7 +120,7 @@ footer .lab{font-family:var(--font-num);font-weight:900;font-size:28px;letter-sp
 .links{display:flex;gap:10px}
 .links i{display:block;width:12px;height:12px;border-radius:50%;background:#3a2f3f}
 .links i.on{background:var(--ecto);box-shadow:0 0 6px var(--ecto)}
-#roomtag{position:absolute;right:44px;bottom:6px;font-family:var(--font-mono);font-size:14px;color:#4a3f4f;letter-spacing:.1em}
+#roomtag{position:absolute;right:44px;bottom:6px;font-family:var(--font-mono);font-size:16px;color:#8a7f8f;letter-spacing:.1em}
 @media (prefers-reduced-motion:reduce){.rec{animation:none}.cam.scared .flash,.cam .flash,.spike{transition:none!important}}
 </style>
 </head><body>
@@ -217,7 +217,8 @@ function fit() { const s = Math.min(innerWidth / 1920, innerHeight / 1080); stag
 addEventListener('resize', fit); fit();
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 if (SM.qs.get('mirror') === '0') $('faceVid').classList.remove('mirror');
-$('roomtag').textContent = 'ROOM ' + SM.room.toUpperCase();
+const TVCODE = Math.random().toString(36).slice(2, 5).toUpperCase();
+$('roomtag').textContent = 'ROOM ' + SM.room.toUpperCase() + ' · TV CODE ' + TVCODE;
 
 /* ================= state (persisted on this screen) ================= */
 // Default machine label follows the room: room=table3 -> "Table 3"
@@ -354,7 +355,7 @@ setInterval(() => {
   const now = Date.now();
   for (const [c, i] of conns) {
     if (now - i.lastSeen > 8000) { try { c.close(); } catch (e) {} conns.delete(c); continue; }
-    if (c.open) { try { c.send(i.role === 'control' ? { t: 'live', live: liveInfo() } : { t: 'ping' }); } catch (e) {} }
+    if (c.open) { try { c.send(i.role === 'control' ? { t: 'live', live: liveInfo() } : { t: 'ping', tv: TVCODE }); } catch (e) {} }
   }
   // drop a video whose phone has gone quiet
   ['face', 'field'].forEach(r => { if (calls[r] && now - linkSeen[r] > 10000) { try { calls[r].close(); } catch (e) {} } });

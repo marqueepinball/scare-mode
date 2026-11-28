@@ -37,7 +37,7 @@ function pill(el, cls, text) { el.className = 'pill ' + cls; el.querySelector('s
 const link = SM.client({
   role: 'field',
   getStream: () => stream,
-  onStatus: s => { pill($('tvPill'), s === 'connected' ? 'ok' : 'warn', 'TV: ' + s); if (s === 'connected') sendOrient(); },
+  onStatus: s => { pill($('tvPill'), s.startsWith('connected') ? 'ok' : 'warn', 'TV: ' + s); if (s === 'connected') sendOrient(); },
 });
 function sendOrient() { link.send({ t: 'orient', v: $('orient').value }); }
 $('orient').value = localStorage.getItem('sm-field-orient') || 'portrait';
